@@ -1,0 +1,3 @@
+[submodule ".cursor/skills/michaelshimeles"]
+	path = .cursor/skills/michaelshimeles
+	url = https://github.com/michaelshimeles/skills.git

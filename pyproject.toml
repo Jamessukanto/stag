@@ -1,0 +1,72 @@
+[project]
+name = "reciprocal-rec"
+version = "0.1.0"
+description = "A modular reciprocal recommendation system with a configurable evaluation pipeline."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+    "pydantic-settings>=2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "mypy>=1.8",
+    "ruff>=0.4",
+    "import-linter>=2",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["src", "src.core", "data", "models", "eval", "experiments"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+disallow_untyped_defs = true
+warn_unused_ignores = false
+warn_redundant_casts = true
+no_implicit_optional = true
+plugins = ["pydantic.mypy"]
+files = ["src", "data", "models", "eval", "experiments"]
+
+[tool.importlinter]
+root_packages = ["src", "data", "models", "eval", "experiments"]
+
+# Hard architectural invariant: the evaluator must never depend on model code.
+# It communicates with models only through ModelArtifact files on disk.
+[[tool.importlinter.contracts]]
+name = "eval must never import models"
+type = "forbidden"
+source_modules = ["eval"]
+forbidden_modules = ["models"]
+
+# data and models are independent siblings; neither imports the other.
+[[tool.importlinter.contracts]]
+name = "data and models are independent"
+type = "independence"
+modules = ["data", "models"]
+
+# eval must not import the data implementation module either.
+[[tool.importlinter.contracts]]
+name = "eval must never import data"
+type = "forbidden"
+source_modules = ["eval"]
+forbidden_modules = ["data"]
+
+# src.core is the shared foundation and must not depend on any feature module.
+[[tool.importlinter.contracts]]
+name = "core depends on nothing downstream"
+type = "forbidden"
+source_modules = ["src.core"]
+forbidden_modules = ["data", "models", "eval", "experiments"]
