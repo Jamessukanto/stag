@@ -1,27 +1,21 @@
-Plan approved. Implement data/.
+# Follow-up implementation prompt — Data
 
-Strict TDD rules:
-1. Write all tests in tests/test_data.py before writing any implementation.
-2. Run pytest — confirm every new test fails before any implementation file exists.
-3. Implement to make tests pass. Do not write untested methods.
-4. Never modify a test to satisfy an implementation.
-5. Run pytest --tb=short after every file change.
+Paste this after you approve the plan, to move from planning to implementation under TDD.
 
-All tests must use a synthetic fixture — do not require the real Libimseti file:
-- Fixture: 15 users, ~60 directional interactions with monotonically increasing fake timestamps.
-- Define this fixture in tests/conftest.py so it is available across sessions.
+```
+The plan is approved. Implement the data/ module strictly test-first. Do not write implementation code before its test exists and fails.
 
-Required tests:
-- test_temporal_split_no_overlap: assert max(train timestamps) < min(val timestamps) < min(test timestamps).
-- test_temporal_split_ratios: assert split sizes are approximately correct (within 5% of config ratios).
-- test_negatives_not_in_positives: for any user, no returned negative appears in that user's positive interaction set.
-- test_random_sampling_reproducible: same seed → same negatives.
-- test_popularity_biased_distribution: over 1000 samples, high-frequency users appear significantly more often than low-frequency users (use a chi-square or ratio check, not exact counts).
-- test_cold_start_behavior: assert documented behavior (raise/skip/flag) occurs for a user absent from train.
-- test_dataloader_protocol_conformance: assert the implementation satisfies the DataLoader Protocol (use isinstance with runtime_checkable or inspect its __protocol_attrs__).
-- test_types_match: assert every returned ProcessedInteraction is an instance of the type from src/core/types.py.
+Workflow, repeat per capability (loading, binarization, splitting, each negative-sampling strategy, downsampling):
+1. Write the pytest tests first, using the shared synthetic fixture from conftest.py. Cover: binarization threshold at exactly 7, deterministic splits under a fixed seed, per-user stratification coverage, "random" and "popularity_biased" negatives, the downsample ratio, and that no train/val/test leakage occurs.
+2. Run pytest and show me the tests failing for the right reason before writing any implementation.
+3. Implement the minimum code to pass, conforming to the DataLoader Protocol and importing all shared types from src/core/.
+4. Run pytest again and show all tests passing.
 
-Before closing, run:
-  grep -r "from models" data/
-  grep -r "from eval" data/
-Both must return empty output. Paste the results as confirmation.
+Hard rules:
+- Never modify a test to make a failing implementation pass. If a test is wrong, explain why and fix the test deliberately, then re-verify it fails for the right reason.
+- Do not redefine or edit anything in src/core/. Do not import from models/ or eval/.
+- Keep the DataLoader as the only public surface; keep parsing/splitting/sampling as separate service functions with explicit inputs and structured outputs (code-structure skill).
+- Type hints everywhere; keep mypy and ruff clean.
+
+When done, commit the data/ module and report the public DataLoader signature so downstream chats can rely on it.
+```

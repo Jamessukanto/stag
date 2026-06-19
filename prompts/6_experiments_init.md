@@ -1,40 +1,40 @@
-Purpose
-Implements the orchestration layer in experiments/: runs all four configurations ({NaiveReciprocal, REF} × {random, popularity_biased}), persists artifacts, invokes the evaluator, and assembles comparison results. This is the only layer that integrates all three modules.
+# Chat name
 
-Dependencies
-All previous chats: Architecture, Data, NaiveModel, REFModel, Evaluation.
+Experiments
 
-You are implementing the experiments/ orchestration layer. This is a Plan Mode session. Produce a plan only — no code.
+## Purpose
 
-Module responsibility:
-- Define the 4-configuration experiment matrix:
-    {NaiveReciprocal, REFModel} × {random_sampling, popularity_biased_sampling}
-- For each configuration:
-    1. Load data using the DataLoader from data/.
-    2. Prepare training interactions with the specified negative sampling strategy.
-    3. Instantiate and fit the specified model.
-    4. Serialize the artifact to artifacts/<model_name>/<sampling_strategy>/<timestamp>/artifact.json
-    5. Call the Evaluator from eval/ with the artifact path. The Evaluator receives only the path, never an in-memory model object.
-    6. Collect the EvaluationResult.
-- Write a comparison table (CSV and JSON) to artifacts/results/comparison.csv and comparison.json.
-- Accept a global random seed from config that is passed through to both negative sampling and model training.
-- Be idempotent: if an artifact already exists for a given (model, sampling, hyperparameter hash), skip training and go straight to evaluation.
+The reproducible orchestration layer that wires the finished modules together end to end: load data, train MF and NeuMF, evaluate both across every aggregation function, and emit the comparison tables. It owns no algorithms — only the run configuration, sequencing, and result collection.
 
-This is the one place where data/, models/, and eval/ are imported together. That is intentional and acceptable only here.
+## Dependencies
 
-Critical re-enforcement: even in this orchestration layer, eval/ must receive only artifact file paths. Never pass in-memory model objects to any eval/ function. Serialize first. Always.
+- Architecture, Data, MF, NeuMF, and Evaluation, all committed and passing their full test suites with stable public interfaces.
+- Imports modules only through their committed public surfaces (DataLoader, the two PreferenceModel implementations, the Evaluator) and the shared contracts. It does not reach into any module's internals.
+
+## Initial Plan Mode prompt
+
+```
+You are implementing the experiments/ module of the reciprocal-rec project. This is a Plan Mode session: produce a plan only, no implementation code.
+
+All upstream modules are complete and frozen: data/, models/mf/, models/neumf/, eval/, and src/core/ contracts. You orchestrate them; you do not reimplement any of their logic and you import only their documented public surfaces.
+
+Scope, strictly limited to experiments/:
+1. A single reproducible pipeline that, from one config:
+   - loads and splits the data via the DataLoader,
+   - trains the MF model and the NeuMF model on the train split, writing each as a ModelArtifact to artifacts/,
+   - evaluates each artifact via the Evaluator across all aggregation functions ("product", "harmonic", "weighted") and all config.k_values,
+   - collects EvaluationResult records into a comparison table (model x aggregation x k -> Recall@K, HR@K, NDCG@K).
+2. Reproducibility: one config file / CLI entry point; a single random_seed controls data splitting, training, and evaluation sampling. Re-running must reproduce the same artifacts and metrics. Persist the resolved config alongside results.
+3. Output: write results as a machine-readable file (CSV/JSON) in artifacts/ or experiments/results/, and render a readable comparison table. No plotting library is required; a printed/markdown table is fine.
 
 Constraints:
-- Lives in experiments/. Do not create files outside experiments/ or tests/.
-- Do not re-implement any logic from data/, models/, or eval/. Glue code only.
-- Do not define new types; use src/core/types.py.
-- The entry point should be runnable as: python -m experiments.run --config config.yaml
-- Config file path is the only CLI argument. Everything else comes from the config file.
+- Import only public interfaces from data/, models/, eval/, and shared types from src/core/. Do not duplicate training, scoring, aggregation, or metric logic that already lives in a module. If something you need is missing from a public interface, note it as an upstream gap rather than reaching into internals or copying code.
+- Apply the code-structure skill: experiments/ is pure orchestration (the "what to run, in what order, with what config"); the mechanics (fit, score, evaluate) stay in their modules. Keep the run as composable steps (load -> train each model -> evaluate each across aggregations -> collect), not one monolithic function.
+- Type hints throughout. The pipeline must be deterministic under the seed.
 
-Plan must address:
-1. The experiment configuration schema: how each of the 4 runs is parameterised as a data structure.
-2. How artifact paths are named to be unique per (model, sampling, hyperparameter hash).
-3. How idempotency is checked (what constitutes a "matching" prior run?).
-4. The comparison table schema: what columns, one row per run.
-5. How failures in one configuration are handled (abort all? log and continue?).
+Produce: the file list with one-line descriptions, the CLI/config entry point design, the exact shape of the comparison table, the test cases (the pipeline runs end to end on the synthetic fixture and produces a fully populated table, results are reproducible under a fixed seed, every model x aggregation x k cell is filled), and any upstream interface gaps you discover.
+```
 
+## Why this chat exists
+
+Orchestration is where module boundaries are most tempting to violate — it is easy to "just import the internals" or copy a training loop to make a run work. Isolating it after the modules stabilize keeps it as a thin, reproducible driver and surfaces any missing public interface as an explicit upstream gap instead of a silent coupling. It also concentrates all reproducibility concerns (seeding, config persistence) in one place.

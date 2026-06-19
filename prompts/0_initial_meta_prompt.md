@@ -2,104 +2,87 @@ Your task is NOT to implement the project.
 
 Your task is NOT to design the software architecture directly.
 
-Your task is to design a prompting strategy for Cursor.
+Your task is to design a Cursor prompting strategy: a suite of chat sessions and, for each one, a ready-to-paste initial Plan Mode prompt that, executed in order, builds the prototype described in the project brief below.
 
-Think of Cursor as a team of specialized engineers, each with its own chat session.
+Think of Cursor as a team of specialized engineers. Each engineer owns exactly one chat session and one subsystem. They never share scratch context — they communicate only through committed artifacts on disk and stable public interfaces. The goal is to preserve architecture and prevent the repository from collapsing into monolithic AI-generated code.
 
-The goal is to preserve architecture and avoid monolithic AI-generated code.
-
-Assumptions:
+# Assumptions
 
 * I primarily use Python.
 * I use Cursor Agent.
 * Each new Cursor chat begins in Plan Mode.
+* Implementation follows TDD.
 * I prefer separate chats for separate subsystems.
-* Implementation should follow TDD.
-* Long-term maintainability is more important than minimizing the number of chats.
-* A lightweight React frontend may be added later.
-* I want clean boundaries between modules.
+* Long-term maintainability matters more than minimizing the number of chats.
+* An API and a lightweight React frontend may be added later.
+* I want clean, structurally enforced boundaries between modules.
 
-Given the project brief (provided below), produce a prompt suite.
+# How to decompose the work
 
-The primary output should be a sequence of Cursor chats.
+Do NOT use a fixed, pre-supplied list of sessions. Derive the set of chat sessions yourself by reading the brief, guided by these principles:
 
-For each chat, provide:
+* The REF framework is the architectural core. Every user carries two directional embeddings (source `p_u`, target `q_v`). A preference model turns these into a directional score `s(u->v)`; an aggregation function `f` fuses both directions into a reciprocal score `r(A,B) = f(s(A->B), s(B->A))`. Treat the preference model as a plug-in behind one common interface.
+* Decompose so that swapping the preference model (Matrix Factorization vs NeuMF) never requires touching data, aggregation, or evaluation code. The comparison must isolate the effect of the preference model alone.
+* Keep shared, model-agnostic concerns separated and independently testable: dataset binarization/splitting, negative sampling, the aggregation function, and the evaluation metrics. Each preference model is its own independently testable unit behind the shared interface.
+* Enforce boundaries structurally, not by convention. A module must never import another module's internals; cross-module communication happens via serialized artifacts on disk plus shared typed contracts and interfaces. (For example, evaluation should consume model artifacts, not import model code.)
+* The API and frontend come last. Core modules must never depend on them.
+* One cohesive subsystem per chat. When in doubt, split for maintainability rather than merging for brevity.
 
-# Chat name
+# Rules every generated prompt must embed
 
-Examples:
+Fold these into the prompts themselves — do not emit them as separate documents:
 
-* Architecture
-* Data
-* Models
-* Evaluation
-* Experiments
-* API
-* Frontend
-* Infrastructure
+* pytest is the test runner; enforce type hints throughout.
+* Never modify tests to make a failing implementation pass.
+* TDD loop: write tests first -> run them and verify they fail for the right reason -> implement -> run pytest -> confirm they pass.
+* Preserve public interfaces and architectural boundaries; downstream chats may not redefine shared contracts.
+* Apply the code-structure skill: actions/orchestration own domain rules ("why/when"); a service layer owns reusable operational mechanics ("how") with a composable, explicit-input, structured-output API. Extract to the service layer only when logic is shared by 2+ callers.
 
-# Purpose
+# For each chat session, produce a file that contains the initial prompt, and possibly followup prompts. Name the file like number_chatname.md e.g. 0_architecture so I know the order to complete one session before starting another. Include:
 
-One or two sentences describing what this chat owns.
+## Chat name
 
-# Dependencies
+A short, descriptive name (e.g. Architecture, Data, a preference-model session, Evaluation, Experiments, API, Frontend).
 
-What previous chats or artifacts this chat may rely on.
+## Purpose
 
-# Initial Plan Mode prompt
+One or two sentences describing exactly what this chat owns.
 
-This is the most important part.
+## Dependencies
 
-Generate the exact prompt I should paste into a fresh Cursor chat while Plan Mode is enabled.
+Which prior chats or committed artifacts this chat relies on, and which it must not touch.
 
-The prompt should:
+## Initial Plan Mode prompt
 
-* constrain scope;
+This is the most important output. Write the exact prompt I should paste into a fresh Cursor chat with Plan Mode enabled. It must:
+
+* constrain scope tightly;
 * define responsibilities;
 * specify allowed dependencies;
 * specify forbidden dependencies;
 * preserve separation of concerns;
-* mention testing expectations when relevant;
-* avoid implementation details unless appropriate.
+* name the REF pieces this session owns (e.g. which of: directional score, aggregation, embeddings, artifact schema, metrics);
+* state testing expectations;
+* avoid implementation details unless they are load-bearing for the boundary.
 
-Write these prompts as ready-to-paste text.
+Write it as ready-to-paste text that instructs the agent to produce a plan only, not code.
 
-# Follow-up implementation prompt
+## Follow-up implementation prompt
 
-After I approve the plan, generate the exact prompt I should use to transition from planning to implementation.
+The exact prompt I paste after I approve the plan, to transition from planning to implementation. It must enforce the TDD loop above: generate tests first, verify failures, implement, run pytest, never edit tests to fit the implementation, and preserve interfaces and boundaries.
 
-These prompts should:
+## Why this chat exists
 
-* enforce TDD;
-* generate tests first;
-* verify failures before implementation;
-* run pytest after changes;
-* avoid modifying tests to satisfy implementations;
-* preserve interfaces and architectural boundaries.
+Briefly justify why this subsystem deserves its own chat rather than sharing context with another.
 
-# Why this chat exists
+# Global ordering
 
-Explain briefly why this subsystem deserves its own chat rather than sharing context with others.
+Recommend the order in which the chats should run. Indicate explicitly which chats can run in parallel, and state the committed artifact each chat must produce before any downstream chat starts.
 
-# Ordering
+# Output constraints
 
-Recommend the order in which chats should be executed.
+* The output should be almost entirely the prompts themselves.
+* Do NOT produce standalone architecture, milestone, risk, or global-rule documents. Incorporate architectural constraints, risks, maintainability concerns, and testing philosophy into the prompts.
+* Optimize for: modularity, architecture preservation, reproducibility, minimal cross-chat coupling, future extensibility, and preventing AI agents from turning the repository into a monolith.
 
-Indicate which chats can be parallelized.
-
-The output should focus almost entirely on producing prompts for Cursor chats.
-
-Do not produce architecture documents, milestone documents, risk documents, or global rule documents as standalone outputs.
-
-Instead, incorporate architectural constraints, risks, maintainability concerns, and testing philosophy into the prompts themselves.
-
-Optimize for:
-
-* modularity;
-* architecture preservation;
-* reproducibility;
-* minimal cross-chat coupling;
-* future extensibility;
-* preventing AI agents from turning the repository into a monolith.
-
-I will provide the project brief below:
+# Last not least, add a prompts/README.md to explain what we're doing and the order of execution. Be intuitive, illuminating but not verbose - the fewer words the better. 

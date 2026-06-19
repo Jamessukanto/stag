@@ -1,29 +1,35 @@
-Purpose
-A lightweight React + TypeScript application that visualises the evaluation comparison table and lets users browse recommendations per model configuration. Communicates exclusively with the API layer.
+# Chat name
 
-Dependencies
-API chat (endpoint contracts). Architecture chat is not a dependency — the frontend has no Python dependency.
+Frontend
 
-You are planning the frontend/ module of a reciprocal recommendation system. This is a Plan Mode session. Produce a plan only — no code.
+## Purpose
 
-This is a lightweight React + TypeScript frontend. It visualises reciprocal recommendation results served by the api/ module. It has no direct access to Python modules, artifact files, or the file system.
+A lightweight React client that lets a user enter an id and view the top-K reciprocal recommendations served by the API. It is purely a presentation layer over the API contract and contains no recommendation logic.
 
-Module responsibility:
-- Display a comparison table: one row per experiment configuration (model × sampling strategy), columns for RP@K and Mutual Hit Rate.
-- Allow a user ID to be entered; display top-K recommendations from each model side by side.
-- Fetch all data from the API module via HTTP. API base URL is controlled by the environment variable VITE_API_BASE_URL.
+## Dependencies
+
+- API (committed and stable): consumes its HTTP endpoints only. It has no knowledge of models, data, or evaluation, and no Python module may import it.
+
+## Initial Plan Mode prompt
+
+```
+You are implementing a lightweight React frontend for the reciprocal-rec project, in a separate frontend/ directory. This is a Plan Mode session: produce a plan only, no implementation code.
+
+The backend API is complete and frozen. The frontend talks to it exclusively over HTTP using the API's documented endpoint contracts (/health, /recommend, optionally /score). It contains no recommendation, scoring, or ranking logic; all of that stays in the backend.
+
+Scope, strictly limited to frontend/:
+1. A minimal single-page app: an input for user_id (and optional controls for k and aggregation), a button to fetch recommendations, and a list rendering the returned ranked target ids (and reciprocal score if available).
+2. A typed API client wrapping the backend endpoints, with loading and error states (handle 404 unknown user and 422 validation cleanly).
+3. Keep it small and modern: a current React + TypeScript setup (e.g. Vite). No heavyweight state management; local component state is enough. Clean, readable UI.
 
 Constraints:
-- Lives in frontend/. Completely isolated from all Python code.
-- React + TypeScript. Vite as build tool.
-- No direct file system access, no Python imports.
-- All API calls are async with loading and error states handled visibly in the UI.
-- No hard-coded user IDs or artifact IDs.
+- The frontend is a leaf: it only calls the API. Do not embed any modeling/scoring logic. Do not import or reach into the Python backend; communicate only via HTTP and a documented base URL from config/env.
+- Apply the code-structure skill's spirit: keep components (presentation) thin and put API access + response shaping in a small typed client/service module, not inside components.
+- Type everything (TypeScript). Keep dependencies minimal.
 
-Plan must address:
-1. Component tree (names and responsibilities).
-2. Which API endpoints are consumed and how their response types are typed in TypeScript.
-3. State management approach (React state is sufficient for this scope — justify if you want something heavier).
-4. How API errors (404, network failure) surface to the user without crashing the UI.
-5. Build and dev server configuration (Vite, proxy for local API).
+Produce: the file/component layout, the typed API client surface, the component tree and state, the test approach (component/client tests with a mocked API: renders recommendations, shows loading, surfaces 404/422 errors), and decisions to confirm (tooling choice, whether to expose aggregation/k controls).
+```
 
+## Why this chat exists
+
+The frontend uses a different language and toolchain (TypeScript/React) and a different testing style than the Python core, and it depends only on the stable HTTP contract. Isolating it keeps JS/TS tooling out of the Python sessions and ensures the UI can be rebuilt or replaced without touching — or even understanding — the research core.

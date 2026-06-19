@@ -1,34 +1,39 @@
-Purpose
-Implements a read-only FastAPI layer over pre-computed artifacts, serving recommendation queries and evaluation summaries to the React frontend. Does not trigger training.
+# Chat name
 
-Dependencies
-Architecture chat. Experiments chat (for the artifact directory layout convention).
+API
 
-You are planning the api/ module of a reciprocal recommendation system. This is a Plan Mode session. Produce a plan only — no code.
+## Purpose
 
-This chat is a future-facing session. The API makes pre-computed artifacts queryable over HTTP. It does not trigger model training. It is read-only.
+A thin read-only service that serves reciprocal recommendations from already-trained model artifacts, ranking candidate profiles by r(A,B). It adds a delivery layer on top of the core system without the core ever depending on it.
 
-Module responsibility:
-- Load ModelArtifact files from the artifacts/ directory using src/core/serialization.ModelArtifact.load().
-- Serve these endpoints:
-    GET /artifacts — list available artifact identifiers (model, sampling strategy, created_at).
-    GET /artifacts/{artifact_id}/recommendations/{user_id}?k=10 — return top-K reciprocal recommendations for a user.
-    GET /artifacts/{artifact_id}/evaluation — return the EvaluationResult for this artifact.
-    GET /health — returns 200 OK.
-- Accept the artifacts base directory as an environment variable ARTIFACT_DIR (no hardcoded paths).
+## Dependencies
+
+- Architecture, the model artifacts produced by Experiments, and the Evaluation module's aggregation + scoring (reused for ranking). All committed and stable.
+- Imports shared contracts from `src/core/` and reads `ModelArtifact`s from disk. It must not modify training, data, or evaluation code, and core modules must never import the API.
+
+## Initial Plan Mode prompt
+
+```
+You are implementing the api/ module of the reciprocal-rec project. This is a Plan Mode session: produce a plan only, no implementation code.
+
+All core modules are complete and frozen. The API is a leaf: nothing in src/core/, data/, models/, eval/, or experiments/ may import it. It loads trained ModelArtifacts from disk and serves recommendations; it performs no training.
+
+Scope, strictly limited to api/:
+1. A small HTTP service (FastAPI preferred) that on startup loads one or more ModelArtifacts from artifacts/ (selected by config: which model_name, which aggregation).
+2. Endpoints:
+   - GET /health -> liveness.
+   - GET /recommend?user_id=...&k=...&aggregation=... -> top-K recommended target user_ids for the given user, ranked by the reciprocal score r(A,B) = f(s(A->B), s(B->A)). Reuse the aggregation and artifact-scoring logic from eval/ via its public interface; do not reimplement scoring, aggregation, or metrics.
+   - Optionally GET /score?user_a=...&user_b=... -> the reciprocal score for a pair.
+3. Request/response models are typed (Pydantic). Validate inputs (unknown user_id -> 404, bad k/aggregation -> 422). No write endpoints.
 
 Constraints:
-- Lives in api/. Do not create files outside api/ or tests/.
-- No imports from models/ or eval/ (the modules). Load artifacts only via src/core/serialization.
-- No side effects on artifact files. All endpoints are GET-only.
-- Use FastAPI. Define Pydantic response models for all endpoints. Do not return raw ModelArtifact objects.
-- Designed for a React frontend to consume. CORS must be configurable via environment variable.
-- Authentication is a stub: include an API_KEY env var check that currently always passes if the var is unset.
+- Import shared types from src/core/ and reuse eval/'s public aggregation + scoring surface for ranking. Do not duplicate scoring/aggregation logic. Do not import data/ or models/ internals.
+- Apply the code-structure skill: route handlers are the orchestration surface (parse request, authorize/validate, shape response); a thin service layer owns reusable mechanics (artifact loading/caching, candidate generation, ranking). Handlers stay slim.
+- Type hints throughout. Keep it stateless beyond the loaded read-only artifacts.
 
-Plan must address:
-1. All endpoint paths, HTTP methods, request params, and response schemas.
-2. How artifact_id is derived from artifact file paths (hash? directory name? timestamp?).
-3. How top-K recommendations are reconstructed at request time from stored embeddings.
-4. Error response format (must be consistent across all 404 and 422 cases).
-5. CORS configuration.
+Produce: the file list with one-line descriptions, the endpoint contracts (params, response schemas, error codes), how artifacts are loaded/cached at startup, the test cases (health, recommend returns K ranked ids, scoring matches eval's r(A,B) on a known artifact, validation/error paths via the test client), and decisions to confirm (framework choice, candidate set for /recommend).
+```
 
+## Why this chat exists
+
+Serving concerns (HTTP, validation, artifact loading, caching) are entirely orthogonal to modeling and evaluation, and pulling them into a core chat would invert the dependency direction and tempt scoring logic to drift into the web layer. A separate leaf chat keeps the API replaceable and guarantees the research core stays runnable without any web stack.

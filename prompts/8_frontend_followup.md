@@ -1,19 +1,20 @@
-Plan approved. Implement frontend/.
+# Follow-up implementation prompt — Frontend
 
-Testing rules:
-1. Write component tests first using Vitest + React Testing Library.
-2. Run npm test — confirm tests fail before implementation.
-3. Implement to make tests pass.
-4. Never modify tests to satisfy implementations.
-5. Run npm test after every component change.
+Paste this after you approve the plan, to move from planning to implementation under TDD.
 
-All API calls must be mocked in tests using MSW (Mock Service Worker) or vi.fn(). No real HTTP requests in tests.
+```
+The plan is approved. Implement frontend/ test-first using the project's JS/TS test runner (e.g. Vitest + Testing Library). Do not write a component before a test that exercises it exists and fails.
 
-Required tests:
-- test_comparison_table_renders: given mocked /artifacts and /artifacts/:id/evaluation responses, the table renders one row per configuration.
-- test_user_search_triggers_api_call: entering a user ID and submitting calls GET /artifacts/:id/recommendations/:userId.
-- test_loading_state_shown: while a fetch is in flight, a loading indicator is visible.
-- test_api_error_shown: when the API returns 404, a human-readable error message is shown — no uncaught exceptions.
-- test_empty_artifacts: when /artifacts returns an empty list, a descriptive empty-state message is shown rather than a broken table.
+Workflow, repeat per capability (API client, recommendations view, loading/error states):
+1. Write the tests first against a mocked API: the recommendations list renders the ranked ids returned by /recommend, a loading state shows while the request is in flight, and 404 (unknown user) and 422 (bad input) responses surface as clean user-facing messages.
+2. Run the tests and show me them failing for the right reason before writing any implementation.
+3. Implement the minimum component and client code to pass, calling the backend only over HTTP via the typed client.
+4. Run the tests again and show all passing.
 
-TypeScript strict mode must be enabled (strict: true in tsconfig.json). No any types except where unavoidable, and those must be commented.
+Hard rules:
+- Never modify a test to make a failing implementation pass. If a test is genuinely wrong, fix it deliberately and re-verify it fails for the right reason first.
+- No recommendation/scoring/ranking logic in the frontend; it only calls the API. Keep components thin and API access in a typed client module.
+- Type everything; keep the linter clean; keep dependencies minimal.
+
+When done, commit frontend/ and report how to run it against the API (env/base URL and the dev command).
+```

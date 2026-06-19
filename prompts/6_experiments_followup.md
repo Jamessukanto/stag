@@ -1,25 +1,21 @@
-Plan approved. Implement experiments/.
+# Follow-up implementation prompt — Experiments
 
-Strict TDD rules:
-1. Write all tests in tests/test_experiments.py before any implementation.
-2. Run pytest — confirm every test fails.
-3. Implement to make tests pass.
-4. Never modify a test to satisfy an implementation.
-5. Run pytest --tb=short after every change.
+Paste this after you approve the plan, to move from planning to implementation under TDD.
 
-Use Protocol-conformant stubs for DataLoader, ReciprocityModel, and Evaluator in tests. Do not run real training in unit tests.
+```
+The plan is approved. Implement experiments/ strictly test-first. Do not write implementation code before its test exists and fails.
 
-Required unit tests:
-- test_four_configs_generated: the experiment matrix produces exactly 4 configurations.
-- test_artifact_serialized_before_eval: mock the Evaluator and assert it is called with a Path argument, never with a model object. (Use unittest.mock.call_args inspection.)
-- test_idempotency_skips_training: if the artifact path already exists, the model's fit() method is not called. (Mock fit() and check call count is zero.)
-- test_comparison_table_schema: the output CSV has one row per configuration and the expected column names.
-- test_seed_propagates: the same seed is passed to both the DataLoader and each ReciprocityModel. (Assert via mock call inspection.)
-- test_partial_failure_behaviour: if one model configuration raises during fit(), assert the documented behaviour (abort or continue-and-log) occurs.
+Workflow, repeat per capability (config loading, the train step per model, the evaluate sweep, result collection, end-to-end pipeline):
+1. Write the pytest tests first, using the shared synthetic fixture and small config so the full pipeline runs fast. Cover: the pipeline runs end to end and produces a comparison table with every model x aggregation x k cell populated, results are reproducible byte-for-byte (or within float tolerance) under a fixed seed, and the resolved config is persisted with the results.
+2. Run pytest and show me the tests failing for the right reason before writing any implementation.
+3. Implement the minimum code to pass, importing only public interfaces from data/, models/, and eval/.
+4. Run pytest again and show all tests passing.
 
-Integration test (marked @pytest.mark.slow, excluded from default run):
-- test_full_pipeline_integration: runs all 4 real configurations end-to-end on the Libimseti dataset. Asserts artifact files exist, comparison.csv is written, and all EvaluationResult fields are non-None. Run manually with: pytest -m slow
+Hard rules:
+- Never modify a test to make a failing implementation pass. If a test is genuinely wrong, fix it deliberately and re-verify it fails for the right reason first.
+- Do not redefine or edit src/core/. Do not import any module's internals and do not copy training, scoring, aggregation, or metric logic; if a public interface is missing something, stop and report it as an upstream gap.
+- Keep the run as composable orchestration steps (code-structure skill), not a monolith.
+- Type hints everywhere; keep mypy and ruff clean; one seed drives the whole run.
 
-Add to pytest.ini:
-  markers =
-    slow: marks tests as requiring real data and significant compute
+When done, commit experiments/ and report the entry-point command and the results file location/schema, so the API chat can serve from trained artifacts.
+```

@@ -1,25 +1,21 @@
-Plan approved. Implement api/.
+# Follow-up implementation prompt — API
 
-Strict TDD rules:
-1. Write tests first in tests/test_api.py using FastAPI TestClient.
-2. Run pytest — confirm tests fail before implementation.
-3. Implement to make tests pass.
-4. Never modify tests to satisfy implementations.
-5. Run pytest --tb=short after every change.
+Paste this after you approve the plan, to move from planning to implementation under TDD.
 
-Use synthetic ModelArtifact fixtures — do not require trained models.
+```
+The plan is approved. Implement api/ strictly test-first. Do not write implementation code before its test exists and fails.
 
-Required tests:
-- test_health_returns_200.
-- test_list_artifacts_empty_dir: returns empty list when artifact directory has no valid artifacts.
-- test_list_artifacts_populated: returns correct identifiers for fixture artifacts.
-- test_recommendations_valid_user: returns list of user IDs of length K.
-- test_recommendations_unknown_user: returns 404 with structured error body.
-- test_recommendations_unknown_artifact: returns 404.
-- test_evaluation_returns_result: returns EvaluationResult fields.
-- test_no_file_written: after any sequence of GET requests, assert no file in the artifact directory has been modified (compare mtime before and after).
+Workflow, repeat per capability (artifact loading/caching, ranking service, each endpoint, validation):
+1. Write the pytest tests first using the framework's test client and a small synthetic ModelArtifact written to a temp artifacts dir. Cover: /health, /recommend returns exactly K ranked target ids for a known user, the served ranking matches eval's r(A,B) on that artifact, /score (if included) matches eval, and validation paths (unknown user_id -> 404, bad k/aggregation -> 422).
+2. Run pytest and show me the tests failing for the right reason before writing any implementation.
+3. Implement the minimum code to pass, reusing eval/'s public aggregation + scoring surface and loading artifacts from disk.
+4. Run pytest again and show all tests passing.
 
-Before closing:
-  grep -r "from models" api/
-  grep -r "from eval" api/
-Both must return empty.
+Hard rules:
+- Never modify a test to make a failing implementation pass. If a test is genuinely wrong, fix it deliberately and re-verify it fails for the right reason first.
+- Do not redefine or edit src/core/. Do not reimplement scoring/aggregation/metrics; reuse eval/. Do not import data/ or models/ internals. Nothing in the core may import api/.
+- Keep route handlers slim; put artifact loading, candidate generation, and ranking in a thin service layer (code-structure skill).
+- Type hints everywhere; keep mypy and ruff clean.
+
+When done, commit api/ and report the endpoint contracts (paths, params, response schemas) so the frontend chat can build against them.
+```
