@@ -119,7 +119,7 @@ All metrics are computed across both models (MF, NN) and aggregation functions.
 
 ## 3. Prototype
 
-**Status:** Architecture and Data sessions complete. Frozen contracts in `core/`; `LibimsetiDataLoader` in `data/` (load, split, negative sampling); shared synthetic fixture in `conftest.py`.
+**Status:** Architecture, Data, and MF sessions complete. Frozen contracts in `core/`; `LibimsetiDataLoader` in `data/`; `MatrixFactorizationModel` in `models/mf/`; shared synthetic fixture in `conftest.py`.
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
@@ -135,9 +135,38 @@ Public entry point: `LibimsetiDataLoader(config, *, downsample=True)` — confor
 | Method | Returns |
 |--------|---------|
 | `load()` | `list[ProcessedInteraction]` — binarized (rating ≥ 7 → 1), per-user stratified train/val/test, optional train-negative downsampling |
-| `get_negatives(user_id, strategy, n, seed)` | `list[str]` — `"random"` or `"popularity_biased"`; candidates are non-interacted users |
+| `sample_uninteracted_candidates(user_id, strategy, n, seed)` | `list[str]` — users the rater has **never** interacted with (`"random"` or `"popularity_biased"`); ranking distractors for eval, not explicit dislikes |
+
+**Three “negative” concepts (do not conflate):**
+
+| Concept | What | Where |
+|---------|------|-------|
+| Explicit negatives | Real dislikes (`label=0`) from ratings | `load()` |
+| Train-negative downsampling | Thin explicit dislikes in **train** only | `load(downsample=True)` |
+| Uninteracted candidates | Never-rated users as ranking distractors | `sample_uninteracted_candidates()` |
 
 Mechanics live in `data/services/` (parsing, indexing, splitting, sampling). `data/` imports only `core/`; it never imports `models/` or `eval/`.
+
+Train-negative downsampling is applied here when `downsample=True`; models train on the interactions they receive and do not re-downsample in `fit()`.
+
+</details>
+
+<details>
+<summary><strong>Matrix Factorization (MF)</strong></summary>
+
+Public entry point: `MatrixFactorizationModel(config, *, sampling_strategy="random", l2_weight=0.01)` — conforms to `core.PreferenceModel`.
+
+| Method | Behavior |
+|--------|----------|
+| `fit(interactions)` | Trains on `split=="train"` rows only; builds `UserIndex` from all users in the input list |
+| `directional_score(user_u, target_v)` | `p_u^T q_v` via learned embeddings |
+| `save(path)` / `load(path)` | Writes/reads a `ModelArtifact` with `model_name="mf"` (no `score_program`; eval uses default dot product) |
+
+**Hyperparameters:** shared run settings (`embedding_dim`, `learning_rate`, `epochs`, `negative_downsample_ratio`, `random_seed`) come from `core.Config`. MF-specific settings ride on the model constructor and are persisted in `ModelArtifact.hyperparameters` — notably `l2_weight` (default `0.01`) and `optimizer: "adam"`. `core.Config` intentionally excludes model-specific fields so the shared contract stays stable when swapping MF for NeuMF.
+
+Train-negative downsampling is **not** applied in `fit()`; the caller passes the interaction list from `LibimsetiDataLoader(downsample=True).load()`. The model records `negative_downsample_ratio` in the artifact for provenance only.
+
+Mechanics live in `models/mf/services/` (embeddings, loss, training, artifact). `models/mf/` imports only `core/`; it never imports `data/` or `eval/`.
 
 </details>
 

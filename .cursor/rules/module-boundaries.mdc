@@ -36,5 +36,15 @@ they never redefine `RawInteraction`, `ProcessedInteraction`, `UserIndex`,
   `core.scoring.verify_scorer_matches_directional` (golden test).
 - `eval/` receives ground truth as a `core.ground_truth.EvaluationDataset`
   from the caller; it never loads data itself.
+- Train-negative downsampling is owned by `data/` (`LibimsetiDataLoader` with
+  `downsample=True` applies `config.negative_downsample_ratio`). Models must not
+  re-downsample in `fit()`; they record `negative_downsample_ratio` in
+  `ModelArtifact.hyperparameters` for provenance only. `experiments/` wires
+  `LibimsetiDataLoader(config, downsample=True).load()` → `model.fit(...)`.
+- `DataLoader.sample_uninteracted_candidates()` returns users a rater has
+  **never** interacted with (ranking distractors for eval). This is not explicit
+  dislikes from `load()`. `eval/` must not import `data/`; it samples distractors
+  from `EvaluationDataset.interacted_targets_by_user` + `artifact.user_index`.
+  `experiments/` builds that graph via `EvaluationDataset.from_interactions(...)`.
 - Boundaries are checked by `python -m importlinter.cli` and
   `tests/test_import_boundaries.py`.

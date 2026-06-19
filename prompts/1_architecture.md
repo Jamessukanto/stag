@@ -38,7 +38,7 @@ Define exactly the following, and nothing more:
    - EvaluationResult: model_name, aggregation, k, recall_at_k (float), hr_at_k (float), ndcg_at_k (float), evaluated_at (ISO timestamp str)
 
 3. Protocols in core/interfaces.py (use typing.Protocol, not ABC)
-   - DataLoader: load() -> list[ProcessedInteraction]; get_negatives(user_id: str, strategy: str, n: int, seed: int) -> list[str]
+   - DataLoader: load() -> list[ProcessedInteraction]; sample_uninteracted_candidates(user_id: str, strategy: str, n: int, seed: int) -> list[str]  # uninteracted users as ranking distractors for eval, NOT explicit dislikes
    - PreferenceModel: fit(interactions: list[ProcessedInteraction]) -> None; directional_score(user_u: str, target_v: str) -> float; save(path: Path) -> None; load(path: Path) -> "PreferenceModel". This is the single plug-in interface both MF and NeuMF implement.
    - Aggregator: aggregate(s_ab: float, s_ba: float) -> float  (the reciprocal fusion function f)
    - Evaluator: evaluate(artifact_path: Path, aggregation: str, k: int) -> EvaluationResult

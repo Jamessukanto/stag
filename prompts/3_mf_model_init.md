@@ -24,14 +24,15 @@ REF context (do not re-derive the framework, just implement this model's directi
 - The aggregation f that fuses s(A->B) and s(B->A) into r(A,B) lives in the evaluation module, NOT here. This model only produces directional scores and embeddings. Do not implement aggregation or any reciprocal score here.
 
 Scope, strictly limited to models/mf/:
-1. A weighted matrix factorization trainer over the binary labels from ProcessedInteraction: minimize a regularized squared loss with L2 regularization on p_u and q_v, optimized with SGD/Adam. Hyperparameters (embedding_dim, learning_rate, epochs, L2 weight, negative_downsample_ratio) come from config.
-2. Use the training split only (assert trained_on_split == "train"). Use the val split for early-stopping/monitoring if you choose; never touch test.
-3. directional_score(u, v) = p_u^T q_v using the learned embeddings and the UserIndex.
-4. save() writes a ModelArtifact (source_embeddings = p, target_embeddings = q, hyperparameters, sampling_strategy, user_index, model_name "mf"); load() reconstructs a working model from it. Round-trip save/load must reproduce directional_score exactly (within float tolerance). MF needs no score_program — the artifact default (dot product) already reproduces s(u->v).
+1. A weighted matrix factorization trainer over the binary labels from ProcessedInteraction: minimize a regularized squared loss with L2 regularization on p_u and q_v, optimized with SGD/Adam. Training hyperparameters (embedding_dim, learning_rate, epochs, L2 weight) come from config.
+2. Train-negative downsampling is owned by data/, not the model. fit() trains on the interactions list exactly as received — do not downsample in models/mf/ (no importing data.services, no duplicating downsample_negatives). The caller (typically experiments/ via LibimsetiDataLoader(downsample=True).load()) applies config.negative_downsample_ratio before fit(). Record negative_downsample_ratio in ModelArtifact.hyperparameters for provenance only.
+3. Use the training split only (assert trained_on_split == "train"). Use the val split for early-stopping/monitoring if you choose; never touch test.
+4. directional_score(u, v) = p_u^T q_v using the learned embeddings and the UserIndex.
+5. save() writes a ModelArtifact (source_embeddings = p, target_embeddings = q, hyperparameters, sampling_strategy, user_index, model_name "mf"); load() reconstructs a working model from it. Round-trip save/load must reproduce directional_score exactly (within float tolerance). MF needs no score_program — the artifact default (dot product) already reproduces s(u->v).
 
 Constraints:
 - Import everything shared from core/. Do not redefine shared types or interfaces.
-- Do not import from eval/ or experiments/. Do not import data/ internals; receive interactions as list[ProcessedInteraction] only.
+- Do not import from eval/ or experiments/. Do not import data/ internals; receive interactions as list[ProcessedInteraction] only. Do not re-downsample train negatives in fit().
 - No aggregation, no reciprocal score, no metrics here. Those belong to evaluation.
 - Apply the code-structure skill: the model class is the orchestration surface (fit/score/save/load); factor reusable mechanics (the SGD update step, loss computation, embedding init, artifact (de)serialization helpers) into explicit-input service functions.
 - Type hints throughout. Deterministic given config.random_seed.

@@ -27,14 +27,14 @@ REF context (implement only this model's directional score):
 
 Scope, strictly limited to models/neumf/:
 1. Define the GMF, MLP, and fusion modules and the forward pass producing s(u->v). Use PyTorch (or justify an alternative). Layer sizes / tower depth come from config (extend config only via the existing hyperparameters mechanism, not by editing core types).
-2. Train with binary cross-entropy (log loss) over the binary labels from ProcessedInteraction, using the train split only (assert trained_on_split == "train"); use val for early stopping/monitoring; never touch test. Use config negative_downsample_ratio for the negative set.
+2. Train with binary cross-entropy (log loss) over the binary labels from ProcessedInteraction, using the train split only (assert trained_on_split == "train"); use val for early stopping/monitoring; never touch test. Train-negative downsampling is owned by data/, not the model: fit() trains on the interactions list exactly as received — do not downsample in models/neumf/. The caller (typically experiments/ via LibimsetiDataLoader(downsample=True).load()) applies config.negative_downsample_ratio before fit(). Record negative_downsample_ratio in ModelArtifact.hyperparameters for provenance only.
 3. Optional: support pretraining GMF and MLP separately and using them to initialize NeuMF; if included, keep it behind a flag and test both paths.
 4. directional_score(u, v) runs the forward pass for the (u, v) pair via the UserIndex.
 5. save() writes a ModelArtifact: put p_u/q_u-style embeddings in source_embeddings/target_embeddings where they map cleanly, and place the remaining learned tensors (MLP weights, output layer, both branch embedding tables) in the artifact's generic extra field so the schema does not change. Also emit extra["score_program"] — the declarative compute graph (lookup/multiply/concat/dense/relu/sigmoid) so core.scoring.reconstruct_scorer reproduces s(u->v) with no model import. load() must fully reconstruct a working model; save/load round-trip must reproduce directional_score within float tolerance.
 
 Constraints:
 - Import everything shared from core/. Do not redefine shared types or interfaces. Do not change the ModelArtifact schema; use its extra field for model-specific tensors and the score_program.
-- Do not import eval/, experiments/, models/mf/, or data/ internals; receive interactions as list[ProcessedInteraction].
+- Do not import eval/, experiments/, models/mf/, or data/ internals; receive interactions as list[ProcessedInteraction]. Do not re-downsample train negatives in fit().
 - No aggregation, reciprocal score, or metrics here.
 - Apply the code-structure skill: the model class is the orchestration surface (fit/score/save/load); factor the branches, the training step, BCE loss, and artifact (de)serialization into explicit-input service functions.
 - Type hints throughout. Deterministic given config.random_seed (seed torch, numpy, and Python RNGs).

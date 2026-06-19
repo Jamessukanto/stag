@@ -16,7 +16,7 @@ Owns everything that turns the raw Libimseti ratings into model-ready supervisio
 ```
 You are planning the data/ module of the reciprocal-rec project. This is a Plan Mode session: produce a plan only, no implementation code. After I review the plan and click Build, implement it under the Build requirements at the end of this prompt.
 
-The shared contracts already exist in core/ and are frozen. You must import and conform to them; do not redefine or modify them. Relevant contracts: RawInteraction, ProcessedInteraction (fields: user_id, target_id, label, split), UserIndex, the DataLoader Protocol (load() -> list[ProcessedInteraction]; get_negatives(user_id, strategy, n, seed) -> list[str]), and the config dataclass.
+The shared contracts already exist in core/ and are frozen. You must import and conform to them; do not redefine or modify them. Relevant contracts: RawInteraction, ProcessedInteraction (fields: user_id, target_id, label, split), UserIndex, the DataLoader Protocol (load() -> list[ProcessedInteraction]; sample_uninteracted_candidates(user_id, strategy, n, seed) -> list[str]), and the config dataclass.
 
 Scope, strictly limited to the data/ module:
 
@@ -33,9 +33,9 @@ Scope, strictly limited to the data/ module:
    - Every user must be represented across the splits where they have enough interactions; document the fallback for users with too few interactions.
    - Splitting must be deterministic given config.random_seed.
 
-4. Negative sampling (for ablation and training efficiency, NOT the source of negative signal)
-   - Implement get_negatives with two strategies: "random" (uniform over non-interacted targets) and "popularity_biased" (sampled proportional to how often a target is rated).
-   - Negative downsampling: trim the explicit-negative set per positive to config.negative_downsample_ratio when enabled. Make clear that explicit negatives from binarization remain the training signal; downsampling only trims them.
+4. Eval candidate sampling (ranking distractors — NOT explicit dislikes, NOT train supervision)
+   - Implement sample_uninteracted_candidates with two strategies: "random" (uniform over users the rater has never interacted with) and "popularity_biased" (sampled proportional to how often a target is rated). Returns uninteracted user ids for eval ranking (HR@K / NDCG@K leave-one-out), not dislikes from load().
+   - Negative downsampling (separate concern): trim the explicit-negative set per positive to config.negative_downsample_ratio when enabled on load(). Explicit negatives from binarization remain the training signal; downsampling only thins them in the train split.
    - All sampling is seeded and reproducible.
 
 5. Implement the DataLoader Protocol as the module's public entry point. This is the only surface other modules use.
