@@ -8,7 +8,7 @@ Defines the project scaffold, shared typed contracts, the serialization schema, 
 
 ## Dependencies
 
-None. This is the first session. Its committed artifacts (`src/core/`, `conftest.py`, `pyproject.toml`) are the foundation every other chat builds on. No other chat may start until this one's contracts are committed.
+None. This is the first session. Its committed artifacts (`core/`, `conftest.py`, `pyproject.toml`) are the foundation every other chat builds on. No other chat may start until this one's contracts are committed.
 
 ## Initial Plan Mode prompt
 
@@ -26,24 +26,24 @@ Your task is to define the shared foundation all modules depend on. Scope is str
 Define exactly the following, and nothing more:
 
 1. Directory layout
-   - Top-level: src/core/, data/, models/, eval/, experiments/, tests/, artifacts/
+   - Top-level: core/, data/, models/, eval/, experiments/, tests/, artifacts/
    - Each package has its own __init__.py
    - A top-level conftest.py and pyproject.toml (configure pytest, mypy, and ruff)
 
-2. Shared types in src/core/types.py
+2. Shared types in core/types.py
    Typed dataclasses or Pydantic v2 models for:
    - RawInteraction: user_id (str), target_id (str), rating (int, 1-10 scale)
    - ProcessedInteraction: user_id (str), target_id (str), label (int, 1 = like / rating>=7, 0 = explicit dislike), split ("train" | "val" | "test")
    - UserIndex: bidirectional mapping between user_id strings and contiguous integer indices
    - EvaluationResult: model_name, aggregation, k, recall_at_k (float), hr_at_k (float), ndcg_at_k (float), evaluated_at (ISO timestamp str)
 
-3. Protocols in src/core/interfaces.py (use typing.Protocol, not ABC)
+3. Protocols in core/interfaces.py (use typing.Protocol, not ABC)
    - DataLoader: load() -> list[ProcessedInteraction]; get_negatives(user_id: str, strategy: str, n: int, seed: int) -> list[str]
    - PreferenceModel: fit(interactions: list[ProcessedInteraction]) -> None; directional_score(user_u: str, target_v: str) -> float; save(path: Path) -> None; load(path: Path) -> "PreferenceModel". This is the single plug-in interface both MF and NeuMF implement.
    - Aggregator: aggregate(s_ab: float, s_ba: float) -> float  (the reciprocal fusion function f)
    - Evaluator: evaluate(artifact_path: Path, aggregation: str, k: int) -> EvaluationResult
 
-4. Serialization contract in src/core/serialization.py
+4. Serialization contract in core/serialization.py
    A ModelArtifact schema that every preference model emits, decoupling models from evaluation:
    - model_name: str ("mf" | "neumf")
    - sampling_strategy: str ("random" | "popularity_biased")
@@ -56,7 +56,7 @@ Define exactly the following, and nothing more:
    - created_at: ISO timestamp str
    Provide ModelArtifact.save(path: Path) and ModelArtifact.load(path: Path) -> ModelArtifact. Use JSON so artifacts are human-readable. Decide and document how directional_score is reconstructed at evaluation time from an artifact without importing model code (e.g. each artifact carries enough to recompute scores, or models expose a pure scoring function the artifact references by name).
 
-5. Config schema in src/core/config.py
+5. Config schema in core/config.py
    One dataclass (or Pydantic BaseSettings) covering: data_path, artifact_dir, train_ratio, val_ratio, test_ratio, embedding_dim, learning_rate, epochs, k_values (list[int]), negative_downsample_ratio, random_seed.
 
 6. Test infrastructure
@@ -64,20 +64,20 @@ Define exactly the following, and nothing more:
    - pytest configured to discover tests/ and per-module test directories.
 
 Constraints:
-- No data loading, model training, aggregation, or evaluation logic here. src/core/ holds contracts only.
-- All types and interfaces defined here are stable. Downstream chats are forbidden from redefining them; they import from src/core/.
-- Apply the code-structure skill: src/core/ is pure contract; it owns no orchestration and no mechanics.
+- No data loading, model training, aggregation, or evaluation logic here. core/ holds contracts only.
+- All types and interfaces defined here are stable. Downstream chats are forbidden from redefining them; they import from core/.
+- Apply the code-structure skill: core/ is pure contract; it owns no orchestration and no mechanics.
 - Python 3.11+. Use typing.Protocol for interfaces. Use dataclasses or Pydantic v2 for data.
 
 Produce: the file list with one-line descriptions, the key design decisions to confirm (especially the ModelArtifact JSON schema and how evaluation reconstructs directional scores without importing models), and anything that would break downstream chats if changed later.
 ```
 
-## Follow-up implementation prompt
+## Build requirements
 
-Paste this after you approve the plan, to move from planning to implementation under TDD. (`src/core/` is contracts, but contracts are still code: serialization round-trips, the config schema, and the synthetic fixture all need tests.)
+After you review the plan and click **Build**, implement under TDD. (`core/` is contracts, but contracts are still code: serialization round-trips, the config schema, and the synthetic fixture all need tests.)
 
 ```
-The plan is approved. Implement src/core/ and the test infrastructure strictly test-first. Do not write implementation code before its test exists and fails.
+Implement core/ and the test infrastructure strictly test-first. Do not write implementation code before its test exists and fails.
 
 Workflow, repeat per artifact (types, interfaces, serialization, config, conftest fixture):
 1. Write the pytest tests first. Cover: every shared type constructs and validates its fields (e.g. label in {0,1}, split in {train,val,test}, rating 1-10); UserIndex maps user_id <-> integer index bijectively; ModelArtifact.save then load round-trips losslessly and reconstructs directional scores via the documented artifact-scoring contract WITHOUT importing any model module; the config schema parses defaults and rejects invalid ratios; and the shared synthetic fixture in conftest.py yields the documented deterministic records.
@@ -87,11 +87,11 @@ Workflow, repeat per artifact (types, interfaces, serialization, config, conftes
 
 Hard rules:
 - Never modify a test to make a failing implementation pass. If a test is genuinely wrong, fix it deliberately and re-verify it fails for the right reason first.
-- src/core/ holds contracts only: no data loading, training, aggregation, or evaluation logic. Protocols are interfaces, not implementations.
+- core/ holds contracts only: no data loading, training, aggregation, or evaluation logic. Protocols are interfaces, not implementations.
 - Once committed, these types, Protocols, the ModelArtifact schema, and the fixture are FROZEN. Downstream chats import them and may not redefine them, so design carefully now.
 - Type hints everywhere; keep mypy and ruff clean. Python 3.11+.
 
-When done, commit src/core/, conftest.py, and pyproject.toml, and report the frozen public surface: every type and its fields, every Protocol signature, the ModelArtifact schema, how evaluation reconstructs directional_score from an artifact without importing models, and the synthetic fixture's shape — so all downstream chats can build against it in parallel.
+When done, commit core/, conftest.py, and pyproject.toml, and report the frozen public surface: every type and its fields, every Protocol signature, the ModelArtifact schema, how evaluation reconstructs directional_score from an artifact without importing models, and the synthetic fixture's shape — so all downstream chats can build against it in parallel.
 ```
 
 ## Why this chat exists

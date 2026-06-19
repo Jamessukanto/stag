@@ -13,7 +13,7 @@ A lightweight React client that lets a user enter an id and view the top-K recip
 ## Initial Plan Mode prompt
 
 ```
-You are implementing a lightweight React frontend for the reciprocal-rec project, in a separate frontend/ directory. This is a Plan Mode session: produce a plan only, no implementation code.
+You are planning a lightweight React frontend for the reciprocal-rec project, in a separate frontend/ directory. This is a Plan Mode session: produce a plan only, no implementation code. After I review the plan and click Build, implement it under the Build requirements at the end of this prompt.
 
 The backend API is complete and frozen. The frontend talks to it exclusively over HTTP using the API's documented endpoint contracts (/health, /recommend, optionally /score). It contains no recommendation, scoring, or ranking logic; all of that stays in the backend.
 
@@ -28,6 +28,19 @@ Constraints:
 - Type everything (TypeScript). Keep dependencies minimal.
 
 Produce: the file/component layout, the typed API client surface, the component tree and state, the test approach (component/client tests with a mocked API: renders recommendations, shows loading, surfaces 404/422 errors), and decisions to confirm (tooling choice, whether to expose aggregation/k controls).
+
+Build requirements (apply when implementing after approval):
+Implement frontend/ test-first using the project's JS/TS test runner (e.g. Vitest + Testing Library). Do not write a component before a test that exercises it exists and fails.
+Workflow, repeat per capability (API client, recommendations view, loading/error states):
+1. Write the tests first against a mocked API: the recommendations list renders the ranked ids returned by /recommend, a loading state shows while the request is in flight, and 404 (unknown user) and 422 (bad input) responses surface as clean user-facing messages.
+2. Run the tests and show them failing for the right reason before writing any implementation.
+3. Implement the minimum component and client code to pass, calling the backend only over HTTP via the typed client.
+4. Run the tests again and show all passing; keep the linter clean.
+Hard rules:
+- Never modify a test to make a failing implementation pass; if a test is genuinely wrong, fix it deliberately and re-verify it fails for the right reason first.
+- No recommendation/scoring/ranking logic in the frontend; it only calls the API. Keep components thin and API access in a typed client module.
+- Type everything; keep the linter clean; keep dependencies minimal.
+When done, commit frontend/ and report how to run it against the API (env/base URL and the dev command).
 ```
 
 ## Why this chat exists

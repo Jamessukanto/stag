@@ -38,7 +38,7 @@ Fold these into the prompts themselves — do not emit them as separate document
 * Preserve public interfaces and architectural boundaries; downstream chats may not redefine shared contracts.
 * Apply the code-structure skill: actions/orchestration own domain rules ("why/when"); a service layer owns reusable operational mechanics ("how") with a composable, explicit-input, structured-output API. Extract to the service layer only when logic is shared by 2+ callers.
 
-# For each chat session, produce a file that contains the initial prompt, and possibly followup prompts. Name the file like number_chatname.md e.g. 0_architecture so I know the order to complete one session before starting another. Include:
+# For each chat session, produce ONE self-contained file. Name it like number_chatname_init.md e.g. 1_architecture.md so I know the order to complete one session before starting another. The intended workflow is: paste the file into a fresh Plan Mode chat, review the plan, then click Build to implement — there is no separate follow-up paste. Each file includes:
 
 ## Chat name
 
@@ -65,11 +65,11 @@ This is the most important output. Write the exact prompt I should paste into a 
 * state testing expectations;
 * avoid implementation details unless they are load-bearing for the boundary.
 
-Write it as ready-to-paste text that instructs the agent to produce a plan only, not code.
+Write it as ready-to-paste text that instructs the agent to produce a plan only, not code — and note that after I review the plan and click Build, it implements under the Build requirements below.
 
-## Follow-up implementation prompt
+## Build requirements (inside the same prompt)
 
-The exact prompt I paste after I approve the plan, to transition from planning to implementation. It must enforce the TDD loop above: generate tests first, verify failures, implement, run pytest, never edit tests to fit the implementation, and preserve interfaces and boundaries.
+End the Plan Mode prompt with a "Build requirements" block that takes effect when I click Build. It must enforce the TDD loop above: generate tests first, verify failures, implement, run pytest (plus import-linter, mypy, ruff), never edit tests to fit the implementation, and preserve interfaces and boundaries. Do not emit a separate follow-up file.
 
 ## Why this chat exists
 
