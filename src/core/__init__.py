@@ -1,34 +1,36 @@
-"""src.core - the stable shared foundation.
+"""Frozen shared contracts for the reciprocal-rec project.
 
-Contracts only: types, interfaces, serialization, and config. Contains no
-business logic. Downstream modules import from here and must not redefine these.
+Everything downstream modules (data, models, eval) are allowed to depend on is
+re-exported here. These contracts are stable: downstream chats import them and
+must not redefine them.
 """
 
-from src.core.config import Config
-from src.core.interfaces import DataLoader, Evaluator, ReciprocityModel
-from src.core.serialization import CURRENT_SCHEMA_VERSION, ModelArtifact
-from src.core.types import (
+from __future__ import annotations
+
+from core.config import Config
+from core.interfaces import Aggregator, DataLoader, Evaluator, PreferenceModel
+from core.scoring import Scorer, reconstruct_scorer
+from core.serialization import ModelArtifact
+from core.types import (
     EvaluationResult,
-    ModelName,
     ProcessedInteraction,
     RawInteraction,
-    SamplingStrategy,
-    SplitLabel,
+    Split,
     UserIndex,
 )
 
 __all__ = [
-    "CURRENT_SCHEMA_VERSION",
+    "Aggregator",
     "Config",
     "DataLoader",
     "EvaluationResult",
     "Evaluator",
     "ModelArtifact",
-    "ModelName",
+    "PreferenceModel",
     "ProcessedInteraction",
     "RawInteraction",
-    "ReciprocityModel",
-    "SamplingStrategy",
-    "SplitLabel",
+    "Scorer",
+    "Split",
     "UserIndex",
+    "reconstruct_scorer",
 ]

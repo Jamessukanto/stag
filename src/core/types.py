@@ -1,104 +1,99 @@
-"""Shared, stable type contracts for the reciprocal-rec project.
+"""Shared, frozen data contracts for the reciprocal-rec project.
 
-These types are the single source of truth consumed by ``data/``, ``models/``,
-and ``eval/``. Downstream modules import them and MUST NOT redefine them.
-
-This module contains contracts only - no business logic.
+These types are the vocabulary every module speaks. They hold no behavior
+beyond validation and the bidirectional UserIndex lookups; no data loading,
+training, aggregation, or evaluation logic lives here.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SplitLabel = Literal["train", "val", "test"]
-ModelName = Literal["naive", "ref"]
-SamplingStrategy = Literal["random", "popularity_biased"]
+Split = Literal["train", "val", "test"]
 
 
 class RawInteraction(BaseModel):
-    """A single directional rating as parsed from the raw dataset."""
+    """A single observed directional rating, as read from the raw dataset."""
 
     model_config = ConfigDict(frozen=True)
 
     user_id: str
     target_id: str
-    rating: float
-    timestamp: int
+    rating: int = Field(ge=1, le=10)
 
 
 class ProcessedInteraction(BaseModel):
-    """A RawInteraction enriched with its train/val/test split label."""
+    """A binarized, split-assigned interaction ready for model supervision."""
 
     model_config = ConfigDict(frozen=True)
 
     user_id: str
     target_id: str
-    rating: float
-    timestamp: int
-    split: SplitLabel
+    label: int
+    split: Split
+
+    @field_validator("label")
+    @classmethod
+    def _label_is_binary(cls, value: int) -> int:
+        if value not in (0, 1):
+            raise ValueError("label must be 0 (dislike) or 1 (like)")
+        return value
 
 
 class UserIndex(BaseModel):
-    """Bidirectional mapping between user_id strings and dense integer indices.
+    """Bidirectional mapping between user_id strings and contiguous int indices."""
 
-    The serialized form is a single ordered ``users`` list where the position of
-    each user_id is its integer index. This ordering is the contract that aligns
-    every embedding row (in ModelArtifact) to a user. Indices are dense
-    ``0..n-1`` with no gaps and no duplicate user_ids.
-    """
-
-    users: list[str] = Field(default_factory=list)
+    id_to_index: dict[str, int]
+    index_to_id: list[str]
 
     @model_validator(mode="after")
-    def _validate_unique(self) -> UserIndex:
-        if len(set(self.users)) != len(self.users):
-            raise ValueError("UserIndex.users must not contain duplicate user_ids")
+    def _check_bijective_and_contiguous(self) -> UserIndex:
+        n = len(self.index_to_id)
+        if len(self.id_to_index) != n:
+            raise ValueError("id_to_index and index_to_id disagree on size")
+        if sorted(self.id_to_index.values()) != list(range(n)):
+            raise ValueError("indices must be contiguous starting at 0")
+        for uid, idx in self.id_to_index.items():
+            if idx < 0 or idx >= n or self.index_to_id[idx] != uid:
+                raise ValueError(f"inconsistent mapping for user_id {uid!r}")
         return self
 
     @classmethod
-    def from_user_ids(cls, user_ids: list[str]) -> UserIndex:
-        """Build a UserIndex preserving first-seen order of the given ids."""
-        seen: dict[str, None] = {}
+    def from_ids(cls, user_ids: Iterable[str]) -> UserIndex:
+        """Build an index from an iterable of ids, deduping by first appearance."""
+        ordered: list[str] = []
+        seen: set[str] = set()
         for uid in user_ids:
             if uid not in seen:
-                seen[uid] = None
-        return cls(users=list(seen.keys()))
+                seen.add(uid)
+                ordered.append(uid)
+        return cls(
+            id_to_index={uid: i for i, uid in enumerate(ordered)},
+            index_to_id=ordered,
+        )
 
-    @property
-    def user_to_index(self) -> dict[str, int]:
-        return {uid: i for i, uid in enumerate(self.users)}
+    def to_index(self, user_id: str) -> int:
+        return self.id_to_index[user_id]
 
-    @property
-    def index_to_user(self) -> dict[int, str]:
-        return dict(enumerate(self.users))
-
-    def get_index(self, user_id: str) -> int:
-        """Return the integer index for a user_id, or raise KeyError."""
-        return self.user_to_index[user_id]
-
-    def get_user(self, index: int) -> str:
-        """Return the user_id for an integer index, or raise IndexError."""
-        return self.users[index]
-
-    def __contains__(self, user_id: object) -> bool:
-        return user_id in set(self.users)
+    def to_id(self, index: int) -> str:
+        return self.index_to_id[index]
 
     def __len__(self) -> int:
-        return len(self.users)
+        return len(self.index_to_id)
 
 
 class EvaluationResult(BaseModel):
-    """The result of evaluating one model artifact at a given K."""
+    """The metrics record an Evaluator emits for one (model, aggregation, k)."""
 
-    # protected_namespaces=() so the ``model_name`` field does not collide with
-    # Pydantic's reserved ``model_`` attribute namespace.
     model_config = ConfigDict(frozen=True, protected_namespaces=())
 
-    model_name: ModelName
-    sampling_strategy: SamplingStrategy
+    model_name: str
+    aggregation: str
     k: int
-    reciprocal_precision_at_k: float
-    mutual_hit_rate: float
+    recall_at_k: float
+    hr_at_k: float
+    ndcg_at_k: float
     evaluated_at: str

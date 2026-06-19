@@ -1,8 +1,10 @@
-"""Structural interfaces (typing.Protocol) every module implementation conforms to.
+"""Plug-in interfaces for the reciprocal-rec project, as typing.Protocols.
 
-These Protocols are contracts only. They contain method signatures with no
-bodies, so downstream classes are checked structurally without inheriting from
-an ABC. Downstream modules MUST NOT redefine these.
+These are structural contracts only: any class with the right methods conforms,
+no inheritance required. They are interfaces, not implementations, and contain
+no logic. Swapping one PreferenceModel for another (MF <-> NeuMF) requires no
+change to data, aggregation, or evaluation code because all four communicate
+only through these Protocols and on-disk artifacts.
 """
 
 from __future__ import annotations
@@ -10,52 +12,44 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from src.core.types import EvaluationResult, ProcessedInteraction
+from core.types import EvaluationResult, ProcessedInteraction
 
 
 @runtime_checkable
 class DataLoader(Protocol):
-    """Loads processed interactions and produces negative samples."""
+    """Turns raw ratings into model-ready supervision and exposes negatives."""
 
-    def load(self) -> list[ProcessedInteraction]:
-        """Return all processed interactions (with split labels)."""
-        ...
+    def load(self) -> list[ProcessedInteraction]: ...
 
-    def get_negatives(
-        self, user_id: str, strategy: str, n: int, seed: int
-    ) -> list[str]:
-        """Return ``n`` negative target user_ids for ``user_id``.
-
-        Sampling is deterministic given ``seed`` and selected by ``strategy``.
-        """
-        ...
+    def get_negatives(self, user_id: str, strategy: str, n: int, seed: int) -> list[str]: ...
 
 
 @runtime_checkable
-class ReciprocityModel(Protocol):
-    """A model that scores reciprocal preference between two users."""
+class PreferenceModel(Protocol):
+    """The single plug-in interface both MF and NeuMF implement.
 
-    def fit(self, interactions: list[ProcessedInteraction]) -> None:
-        """Train the model on processed interactions."""
-        ...
+    Produces a directional score s(u -> v); it never computes the reciprocal
+    score r(A, B) - that fusion belongs to the Aggregator in evaluation.
+    """
 
-    def predict(self, user_a: str, user_b: str) -> float:
-        """Return the reciprocal preference score r(A, B)."""
-        ...
+    def fit(self, interactions: list[ProcessedInteraction]) -> None: ...
 
-    def save(self, path: Path) -> None:
-        """Serialize the trained model to a ModelArtifact on disk."""
-        ...
+    def directional_score(self, user_u: str, target_v: str) -> float: ...
 
-    def load(self, path: Path) -> None:
-        """Restore the model from a ModelArtifact so predict() works."""
-        ...
+    def save(self, path: Path) -> None: ...
+
+    def load(self, path: Path) -> PreferenceModel: ...
+
+
+@runtime_checkable
+class Aggregator(Protocol):
+    """The reciprocal fusion function f: r(A, B) = f(s(A->B), s(B->A))."""
+
+    def aggregate(self, s_ab: float, s_ba: float) -> float: ...
 
 
 @runtime_checkable
 class Evaluator(Protocol):
-    """Evaluates a model artifact loaded from disk."""
+    """Scores a model from its on-disk artifact, never importing model code."""
 
-    def evaluate(self, artifact_path: Path, k: int) -> EvaluationResult:
-        """Load the artifact at ``artifact_path`` and compute metrics at ``k``."""
-        ...
+    def evaluate(self, artifact_path: Path, aggregation: str, k: int) -> EvaluationResult: ...

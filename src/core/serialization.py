@@ -1,89 +1,69 @@
 """The ModelArtifact serialization contract.
 
-This is the ONLY channel between ``models/`` (which writes artifacts) and
-``eval/`` (which reads them). The on-disk format is human-readable JSON.
+A ModelArtifact is the only thing a preference model emits and the only thing
+evaluation consumes. It decouples models from evaluation: evaluation reads the
+artifact from disk and reconstructs directional scores via
+``core.scoring.reconstruct_scorer`` WITHOUT importing any model module.
 
-Row ``i`` of ``source_embeddings`` and ``target_embeddings`` corresponds to
-``user_index.users[i]``. This alignment is part of the contract and must not be
-broken by any producer or consumer.
+Decoupling rule (frozen):
+- ``source_embeddings`` (p_u) and ``target_embeddings`` (q_u) hold the primary
+  directional embedding tables.
+- ``extra`` is a generic bag for any additional model-specific tensors (e.g. a
+  NeuMF MLP's weights and its separate branch embedding tables).
+- ``extra["score_program"]`` optionally carries a self-describing compute graph
+  (see ``core.scoring``). If absent, the directional score defaults to the dot
+  product ``p_u . q_v`` (matrix factorization). This is what lets evaluation
+  score any model generically, never branching on ``model_name``.
+
+The JSON encoding is intentionally human-readable.
 """
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.core.types import ModelName, SamplingStrategy, UserIndex
+from core.types import UserIndex
 
-CURRENT_SCHEMA_VERSION = 1
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 class ModelArtifact(BaseModel):
-    """Serialization schema every model must output.
+    """The serialized output every preference model emits."""
 
-    ``schema_version`` lets future format changes be detected rather than
-    silently misread by ``eval/``.
-    """
-
-    # protected_namespaces=() so the ``model_name`` field does not collide with
-    # Pydantic's reserved ``model_`` attribute namespace.
     model_config = ConfigDict(protected_namespaces=())
 
-    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION)
-    model_name: ModelName
-    sampling_strategy: SamplingStrategy
-    hyperparameters: dict[str, Any] = Field(default_factory=dict)
+    model_name: str
+    sampling_strategy: str
+    hyperparameters: dict[str, Any]
     user_index: UserIndex
     source_embeddings: list[list[float]]
     target_embeddings: list[list[float]]
-    trained_on_split: str
-    created_at: str
+    extra: dict[str, Any] = Field(default_factory=dict)
+    trained_on_split: str = "train"
+    created_at: str = Field(default_factory=_utc_now_iso)
 
-    @model_validator(mode="after")
-    def _validate_structure(self) -> ModelArtifact:
-        n_users = len(self.user_index)
-        if len(self.source_embeddings) != n_users:
-            raise ValueError(
-                "source_embeddings rows "
-                f"({len(self.source_embeddings)}) must equal number of users "
-                f"({n_users})"
-            )
-        if len(self.target_embeddings) != n_users:
-            raise ValueError(
-                "target_embeddings rows "
-                f"({len(self.target_embeddings)}) must equal number of users "
-                f"({n_users})"
-            )
-        self._validate_consistent_dim(self.source_embeddings, "source_embeddings")
-        self._validate_consistent_dim(self.target_embeddings, "target_embeddings")
-        if self.trained_on_split != "train":
-            raise ValueError(
-                f"trained_on_split must be 'train', got '{self.trained_on_split}'"
-            )
-        return self
-
-    @staticmethod
-    def _validate_consistent_dim(matrix: list[list[float]], name: str) -> None:
-        if not matrix:
-            return
-        dim = len(matrix[0])
-        for row_idx, row in enumerate(matrix):
-            if len(row) != dim:
-                raise ValueError(
-                    f"{name} row {row_idx} has length {len(row)}, expected {dim} "
-                    "(all embedding rows must share the same dimension)"
-                )
+    @field_validator("trained_on_split")
+    @classmethod
+    def _must_train_on_train(cls, value: str) -> str:
+        if value != "train":
+            raise ValueError('trained_on_split must be "train"')
+        return value
 
     def save(self, path: Path) -> None:
-        """Write the artifact to ``path`` as indented, human-readable JSON."""
+        """Write the artifact as human-readable JSON."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self.model_dump_json(indent=2), encoding="utf-8")
+        path.write_text(json.dumps(self.model_dump(), indent=2, sort_keys=True))
 
     @classmethod
     def load(cls, path: Path) -> ModelArtifact:
-        """Read and validate a ModelArtifact from ``path``."""
-        path = Path(path)
-        return cls.model_validate_json(path.read_text(encoding="utf-8"))
+        """Read an artifact previously written by :meth:`save`."""
+        data = json.loads(Path(path).read_text())
+        return cls.model_validate(data)
