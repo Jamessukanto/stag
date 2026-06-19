@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from core.types import (
     EvaluationResult,
     ProcessedInteraction,
     RawInteraction,
     UserIndex,
 )
+from pydantic import ValidationError
 
 
 class TestRawInteraction:

@@ -8,8 +8,13 @@ must not redefine them.
 from __future__ import annotations
 
 from core.config import Config
+from core.ground_truth import (
+    EvaluationDataset,
+    filter_split,
+    mutual_match_partners,
+)
 from core.interfaces import Aggregator, DataLoader, Evaluator, PreferenceModel
-from core.scoring import Scorer, reconstruct_scorer
+from core.scoring import Scorer, reconstruct_scorer, verify_scorer_matches_directional
 from core.serialization import ModelArtifact
 from core.types import (
     EvaluationResult,
@@ -23,6 +28,7 @@ __all__ = [
     "Aggregator",
     "Config",
     "DataLoader",
+    "EvaluationDataset",
     "EvaluationResult",
     "Evaluator",
     "ModelArtifact",
@@ -32,5 +38,8 @@ __all__ = [
     "Scorer",
     "Split",
     "UserIndex",
+    "filter_split",
+    "mutual_match_partners",
     "reconstruct_scorer",
+    "verify_scorer_matches_directional",
 ]

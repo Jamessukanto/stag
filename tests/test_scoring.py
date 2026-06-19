@@ -11,7 +11,6 @@ import sys
 import numpy as np
 import numpy.typing as npt
 import pytest
-
 from core.scoring import reconstruct_scorer
 from core.serialization import ModelArtifact
 from core.types import UserIndex

@@ -29,7 +29,7 @@ Adding a model that needs only these primitives requires no change here.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -123,3 +123,29 @@ def reconstruct_scorer(artifact: ModelArtifact) -> Scorer:
         return _to_scalar(env[last])
 
     return _program_scorer
+
+
+def verify_scorer_matches_directional(
+    artifact: ModelArtifact,
+    directional_score: Callable[[str, str], float],
+    pairs: Sequence[tuple[str, str]],
+    *,
+    rtol: float = 1e-5,
+    atol: float = 1e-8,
+) -> None:
+    """Assert the artifact interpreter matches a model's ``directional_score``.
+
+    Models call this in their save/load round-trip tests so training forward
+    passes and ``core.scoring.reconstruct_scorer`` never silently diverge.
+    Raises ``AssertionError`` on the first mismatched pair.
+    """
+    scorer = reconstruct_scorer(artifact)
+    user_index = artifact.user_index
+    for user_u, target_v in pairs:
+        expected = directional_score(user_u, target_v)
+        actual = scorer(user_index.to_index(user_u), user_index.to_index(target_v))
+        if not np.isclose(actual, expected, rtol=rtol, atol=atol):
+            raise AssertionError(
+                f"score mismatch for ({user_u!r}, {target_v!r}): "
+                f"interpreter={actual}, model={expected}"
+            )

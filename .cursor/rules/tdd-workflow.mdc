@@ -1,0 +1,29 @@
+---
+description: Test-driven workflow for every implementation session
+alwaysApply: true
+---
+
+# TDD Workflow (every session)
+
+When implementing any module (after a plan is approved / Build is clicked):
+
+1. **Tests first.** Write pytest tests before implementation. Use the shared
+   synthetic fixtures in `conftest.py`; do not invent divergent toy data.
+2. **Watch them fail.** Run `pytest` and confirm the new tests fail for the
+   right reason before writing implementation code.
+3. **Implement the minimum** to make tests pass.
+4. **Green + clean.** Re-run `pytest`, then `python -m importlinter.cli`,
+   `mypy`, and `ruff check .`. All must pass before the work is done.
+
+## Hard rules
+
+- **Never modify a test to make a failing implementation pass.** If a test is
+  genuinely wrong, fix it deliberately and re-verify it fails for the right
+  reason first.
+- **Type hints everywhere.** Keep `mypy` (strict) and `ruff` clean.
+- **Determinism.** Anything stochastic (splits, sampling, training) must be
+  reproducible under `config.random_seed`.
+- Apply the code-structure skill: a class/handler is the orchestration surface
+  (the "why/when"); reusable mechanics ("how") live in explicit-input,
+  structured-output service functions. Extract to services only when shared by
+  2+ callers.

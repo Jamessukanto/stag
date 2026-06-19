@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.ground_truth import EvaluationDataset
 from core.interfaces import (
     Aggregator,
     DataLoader,
@@ -46,7 +47,14 @@ class _StubAggregator:
 
 
 class _StubEvaluator:
-    def evaluate(self, artifact_path: Path, aggregation: str, k: int) -> EvaluationResult:
+    def evaluate(
+        self,
+        artifact_path: Path,
+        ground_truth: EvaluationDataset,
+        aggregation: str,
+        k: int,
+    ) -> EvaluationResult:
+        _ = artifact_path, ground_truth
         return EvaluationResult(
             model_name="x",
             aggregation=aggregation,

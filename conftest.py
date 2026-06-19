@@ -13,7 +13,6 @@ The dataset is hand-designed to exercise the cases the system cares about:
 from __future__ import annotations
 
 import pytest
-
 from core.serialization import ModelArtifact
 from core.types import (
     ProcessedInteraction,

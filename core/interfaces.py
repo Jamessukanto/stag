@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from core.ground_truth import EvaluationDataset
 from core.types import EvaluationResult, ProcessedInteraction
 
 
@@ -50,6 +51,17 @@ class Aggregator(Protocol):
 
 @runtime_checkable
 class Evaluator(Protocol):
-    """Scores a model from its on-disk artifact, never importing model code."""
+    """Scores a model from its on-disk artifact, never importing model code.
 
-    def evaluate(self, artifact_path: Path, aggregation: str, k: int) -> EvaluationResult: ...
+    Ground truth arrives as an :class:`EvaluationDataset` built by the caller
+    (typically ``experiments/`` filtering ``DataLoader.load()`` to the eval
+    split). ``eval/`` must not import ``data/`` to obtain it.
+    """
+
+    def evaluate(
+        self,
+        artifact_path: Path,
+        ground_truth: EvaluationDataset,
+        aggregation: str,
+        k: int,
+    ) -> EvaluationResult: ...

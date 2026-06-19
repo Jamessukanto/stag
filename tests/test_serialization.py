@@ -5,10 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
-
 from core.serialization import ModelArtifact
 from core.types import UserIndex
+from pydantic import ValidationError
 
 
 def _make_artifact(**overrides: object) -> ModelArtifact:

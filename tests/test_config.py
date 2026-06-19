@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from core.config import Config
+from pydantic import ValidationError
 
 
 class TestConfigDefaults:

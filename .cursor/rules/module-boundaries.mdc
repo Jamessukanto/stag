@@ -1,0 +1,40 @@
+---
+description: Frozen contracts and module import boundaries for reciprocal-rec
+alwaysApply: true
+---
+
+# Module Boundaries (structurally enforced)
+
+Modules communicate only through `core/` contracts and on-disk artifacts.
+Never import another module's internals.
+
+| Module | May import | Must NOT import |
+|--------|------------|-----------------|
+| `core/` | stdlib, numpy, pydantic | `data/`, `models/`, `eval/`, `experiments/`, `api/` |
+| `data/` | `core/` | `models/`, `eval/` |
+| `models/` | `core/` | `data/`, `eval/`, the other model package |
+| `eval/` | `core/` | `models/`, `data/` |
+| `experiments/` | public surfaces of `data`, `models`, `eval`, `core` | any module's internals (`data.services`, `models.mf`, `models.neumf`) |
+| `api/` | `core/`, `eval/` public surface | `data/`, `models/` internals |
+
+## Frozen contracts — do not edit or redefine
+
+`core/` is frozen: `types.py`, `interfaces.py`, `serialization.py`,
+`scoring.py`, `ground_truth.py`, `config.py`. Downstream modules import these;
+they never redefine `RawInteraction`, `ProcessedInteraction`, `UserIndex`,
+`ModelArtifact`, the Protocols, or `Config`.
+
+## Key invariants
+
+- `eval/` scores a model **only** from its `ModelArtifact` via
+  `core.scoring.reconstruct_scorer` — never imports `models/`, never branches
+  on `model_name`. If scoring seems to need a model import, stop and report a
+  contract gap.
+- Models put extra tensors in `ModelArtifact.extra` (incl. a `score_program`
+  for non-linear models); they never change the artifact schema.
+- After save/load, a model must pass
+  `core.scoring.verify_scorer_matches_directional` (golden test).
+- `eval/` receives ground truth as a `core.ground_truth.EvaluationDataset`
+  from the caller; it never loads data itself.
+- Boundaries are checked by `python -m importlinter.cli` and
+  `tests/test_import_boundaries.py`.
