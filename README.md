@@ -31,7 +31,7 @@ Most recommender systems (e.g. Netflix) are user–item problems where only one 
 
 #### 2.1.2 Code implementation with Cursor Agent
 
-A meta prompt (`prompts/0_initial_meta_prompt.md`) plans each chat session; its outputs in `prompts/` are pasted into separate Plan Mode chats (`*_init.md` → approve → `*_followup.md`). One session per module; modules communicate only through committed artifacts and `src/core/` contracts. 
+A meta prompt (`prompts/0_initial_meta_prompt.md`) plans each chat session; its outputs in `prompts/` are pasted into separate Plan Mode chats (`*_init.md` → review plan → **Build**). Each prompt carries its own Build requirements (TDD loop + boundaries), and project-wide rules live in `.cursor/rules/`. One session per module; modules communicate only through committed artifacts and `core/` contracts. 
 
 ```
 Chat session execution order:
@@ -119,24 +119,71 @@ All metrics are computed across both models (MF, NN) and aggregation functions.
 
 ## 3. Prototype
 
-**Status:** Architecture session complete (`56324f2`). Frozen contracts in `src/core/`; shared synthetic fixture in `conftest.py`.
-
-```
-src/core/     types, Protocols, ModelArtifact, scoring interpreter, config
-data/         (Data chat)
-models/mf/    (MF chat)
-models/neumf/ (NeuMF chat)
-eval/         (Evaluation chat — never imports models/)
-artifacts/    serialized ModelArtifact JSON
-```
+**Status:** Architecture and Data sessions complete. Frozen contracts in `core/`; `LibimsetiDataLoader` in `data/` (load, split, negative sampling); shared synthetic fixture in `conftest.py`.
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest && mypy && ruff check .
+pytest && python -m importlinter.cli && mypy && ruff check .
 ```
 
-**Key invariant:** `eval/` scores models from on-disk `ModelArtifact` files via `core.scoring.reconstruct_scorer` — no model imports, no branching on `model_name`.
+<details>
+<summary><strong>Data</strong></summary>
+
+Public entry point: `LibimsetiDataLoader(config, *, downsample=True)` — conforms to `core.DataLoader`.
+
+| Method | Returns |
+|--------|---------|
+| `load()` | `list[ProcessedInteraction]` — binarized (rating ≥ 7 → 1), per-user stratified train/val/test, optional train-negative downsampling |
+| `get_negatives(user_id, strategy, n, seed)` | `list[str]` — `"random"` or `"popularity_biased"`; candidates are non-interacted users |
+
+Mechanics live in `data/services/` (parsing, indexing, splitting, sampling). `data/` imports only `core/`; it never imports `models/` or `eval/`.
+
+</details>
+
+<details>
+<summary><strong>Architecture</strong></summary>
+
+### Layout
+
+```
+core/         shared types, Protocols, ModelArtifact, scoring interpreter, config
+data/         Libimseti loading, binarization, splits, negative sampling
+models/mf/    matrix-factorization preference model (plug-in)
+models/neumf/ NeuMF preference model (plug-in)
+eval/         aggregation, ranking, metrics — never imports models/
+experiments/  orchestrates load → train → evaluate
+artifacts/    serialized ModelArtifact JSON (+ optional EvaluationDataset JSON)
+```
+
+Feature modules (`data/`, `models/`, `eval/`) sit beside `core/` at the repo root. Only `core/` is imported by everyone; siblings never import each other's internals.
+
+### How eval scores models (without importing them)
+
+`eval/` reads **`ModelArtifact`** JSON only — never `models/`. Each file holds learned weights plus an optional `score_program` (step list for non-linear models). `core.scoring.reconstruct_scorer` runs it; same path for every model.
+
+| Model | Scoring |
+|-------|---------|
+| MF | Dot product `p_u · q_v` (default when no program) |
+| NeuMF | `score_program` in `extra` (lookup → concat → dense → sigmoid) |
+
+Golden tests (`verify_scorer_matches_directional`) keep the interpreter aligned with each model's `directional_score`.
+
+### Data flow
+
+```
+ratings.dat → data/ → ProcessedInteraction[]
+                         ↓ train split
+                    models/ → ModelArtifact JSON
+                         ↓
+              experiments/ pairs artifact + EvaluationDataset (test split)
+                         ↓
+                    eval/ → EvaluationResult
+```
+
+`eval/` never calls `data/` — `experiments/` (or any caller) filters the loaded interactions and passes ground truth in.
+
+</details>
 
 ---
 

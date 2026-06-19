@@ -17,15 +17,13 @@ dev = [
     "pytest",
     "mypy",
     "ruff",
+    "import-linter",
 ]
 
 [tool.setuptools]
-packages = ["core"]
-package-dir = { "core" = "src/core" }
+packages = ["core", "data", "data.services", "eval", "models", "experiments"]
 
 [tool.pytest.ini_options]
-# Discover the top-level tests/ dir and any per-module test directories
-# (e.g. data/tests, models/mf/tests) that downstream chats add.
 testpaths = ["tests", "data", "models", "eval", "experiments"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
@@ -36,8 +34,7 @@ addopts = "-ra"
 python_version = "3.11"
 strict = true
 warn_unused_configs = true
-mypy_path = "src"
-files = ["src", "tests", "conftest.py"]
+files = ["core", "data", "eval", "models", "experiments", "tests", "conftest.py"]
 
 [[tool.mypy.overrides]]
 module = ["numpy.*"]
@@ -46,7 +43,64 @@ ignore_missing_imports = true
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["src", "tests"]
+src = ["core", "data", "eval", "models", "experiments", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.importlinter]
+root_packages = [
+    "core",
+    "data",
+    "eval",
+    "models",
+    "experiments",
+]
+
+[[tool.importlinter.contracts]]
+name = "core is independent"
+type = "forbidden"
+source_modules = ["core"]
+forbidden_modules = [
+    "data",
+    "eval",
+    "models",
+    "experiments",
+]
+
+[[tool.importlinter.contracts]]
+name = "eval must not import models or data"
+type = "forbidden"
+source_modules = ["eval"]
+forbidden_modules = [
+    "models",
+    "data",
+]
+
+[[tool.importlinter.contracts]]
+name = "models must not import eval or data"
+type = "forbidden"
+source_modules = ["models"]
+forbidden_modules = [
+    "eval",
+    "data",
+]
+
+[[tool.importlinter.contracts]]
+name = "data must not import models or eval"
+type = "forbidden"
+source_modules = ["data"]
+forbidden_modules = [
+    "models",
+    "eval",
+]
+
+[[tool.importlinter.contracts]]
+name = "experiments imports only public surfaces"
+type = "forbidden"
+source_modules = ["experiments"]
+forbidden_modules = [
+    "data.services",
+    "models.mf",
+    "models.neumf",
+]
