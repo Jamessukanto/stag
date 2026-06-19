@@ -61,31 +61,33 @@ class TestLoad:
         assert sum(1 for p in trimmed if p.label == 1) == sum(1 for p in full if p.label == 1)
 
 
-class TestGetNegatives:
+class TestSampleUninteractedCandidates:
     def test_excludes_interacted_and_self(self, data_config: Config) -> None:
         loader = LibimsetiDataLoader(data_config)
-        negs = loader.get_negatives("u1", strategy="random", n=10, seed=0)
+        negs = loader.sample_uninteracted_candidates("u1", strategy="random", n=10, seed=0)
         # u1 interacted with u2, u3, u4; never itself
         assert "u1" not in negs
         assert {"u2", "u3", "u4"}.isdisjoint(negs)
 
     def test_reproducible_for_same_seed(self, data_config: Config) -> None:
         loader = LibimsetiDataLoader(data_config)
-        a = loader.get_negatives("u4", strategy="random", n=2, seed=11)
-        b = loader.get_negatives("u4", strategy="random", n=2, seed=11)
+        a = loader.sample_uninteracted_candidates("u4", strategy="random", n=2, seed=11)
+        b = loader.sample_uninteracted_candidates("u4", strategy="random", n=2, seed=11)
         assert a == b
 
     def test_popularity_biased_returns_valid_candidates(self, data_config: Config) -> None:
         loader = LibimsetiDataLoader(data_config)
-        negs = loader.get_negatives("u4", strategy="popularity_biased", n=2, seed=1)
+        negs = loader.sample_uninteracted_candidates(
+            "u4", strategy="popularity_biased", n=2, seed=1
+        )
         assert set(negs) <= {"u2", "u3"}
 
     def test_caps_at_candidate_pool(self, data_config: Config) -> None:
         loader = LibimsetiDataLoader(data_config)
-        negs = loader.get_negatives("u1", strategy="random", n=100, seed=0)
+        negs = loader.sample_uninteracted_candidates("u1", strategy="random", n=100, seed=0)
         assert set(negs) == {"u5"}
 
     def test_unknown_strategy_raises(self, data_config: Config) -> None:
         loader = LibimsetiDataLoader(data_config)
         with pytest.raises(ValueError):
-            loader.get_negatives("u1", strategy="bogus", n=1, seed=0)
+            loader.sample_uninteracted_candidates("u1", strategy="bogus", n=1, seed=0)

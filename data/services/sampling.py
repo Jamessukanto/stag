@@ -3,9 +3,10 @@
 Two things live here, both pure mechanics driven by an explicit ``rng`` so they
 are reproducible:
 
-- ``sample_random`` / ``sample_popularity_biased``: draw negatives from a
-  candidate pool, used by the DataLoader's ``get_negatives``. These exist for
-  ablation and training efficiency, not as the source of negative signal.
+- ``sample_random`` / ``sample_popularity_biased``: draw uninteracted users from
+  a candidate pool, used by the DataLoader's ``sample_uninteracted_candidates``.
+  These are ranking distractors for evaluation, not explicit dislikes and not
+  the training signal.
 - ``downsample_negatives``: trim the explicit negatives (from binarization) per
   positive within a set of records. The explicit negatives remain the training
   signal; this only thins them when a smaller negative-to-positive ratio is

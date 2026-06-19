@@ -23,7 +23,9 @@ class _StubDataLoader:
     def load(self) -> list[ProcessedInteraction]:
         return []
 
-    def get_negatives(self, user_id: str, strategy: str, n: int, seed: int) -> list[str]:
+    def sample_uninteracted_candidates(
+        self, user_id: str, strategy: str, n: int, seed: int
+    ) -> list[str]:
         return []
 
 

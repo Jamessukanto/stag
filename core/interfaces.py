@@ -18,11 +18,13 @@ from core.types import EvaluationResult, ProcessedInteraction
 
 @runtime_checkable
 class DataLoader(Protocol):
-    """Turns raw ratings into model-ready supervision and exposes negatives."""
+    """Turns raw ratings into model-ready supervision and eval distractor sampling."""
 
     def load(self) -> list[ProcessedInteraction]: ...
 
-    def get_negatives(self, user_id: str, strategy: str, n: int, seed: int) -> list[str]: ...
+    def sample_uninteracted_candidates(
+        self, user_id: str, strategy: str, n: int, seed: int
+    ) -> list[str]: ...
 
 
 @runtime_checkable

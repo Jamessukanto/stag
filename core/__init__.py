@@ -10,6 +10,7 @@ from __future__ import annotations
 from core.config import Config
 from core.ground_truth import (
     EvaluationDataset,
+    build_interacted_targets_by_user,
     filter_split,
     mutual_match_partners,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "Scorer",
     "Split",
     "UserIndex",
+    "build_interacted_targets_by_user",
     "filter_split",
     "mutual_match_partners",
     "reconstruct_scorer",

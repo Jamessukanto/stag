@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from core.ground_truth import (
     EvaluationDataset,
+    build_interacted_targets_by_user,
     filter_split,
     mutual_match_partners,
 )
@@ -49,6 +50,13 @@ class TestEvaluationDataset:
         )
         assert dataset.split == "test"
         assert all(row.split == "test" for row in dataset.interactions)
+        assert dataset.interacted_targets_by_user["u1"] == ["u2", "u3", "u4"]
+
+    def test_build_interacted_targets_from_all_splits(
+        self, processed_interactions: list[ProcessedInteraction]
+    ) -> None:
+        graph = build_interacted_targets_by_user(processed_interactions)
+        assert "u5" in graph["u2"]  # test-split interaction still in graph
 
     def test_rejects_mixed_splits(self) -> None:
         with pytest.raises(ValueError):

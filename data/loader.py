@@ -96,13 +96,16 @@ class LibimsetiDataLoader:
             )
         return kept_train + held_out
 
-    def get_negatives(self, user_id: str, strategy: str, n: int, seed: int) -> list[str]:
-        """Sample up to ``n`` negative targets for ``user_id``.
+    def sample_uninteracted_candidates(
+        self, user_id: str, strategy: str, n: int, seed: int
+    ) -> list[str]:
+        """Sample up to ``n`` uninteracted users as ranking distractors for ``user_id``.
 
-        Candidates are users the requester has never interacted with (and never
-        the requester itself). ``"random"`` draws uniformly; ``"popularity_biased"``
-        draws proportional to how often each target is rated. Both are seeded by
-        ``seed`` and independent of ``config.random_seed``.
+        Returns users the rater has **never** interacted with (not explicit
+        dislikes from ``load()``). ``"random"`` draws uniformly;
+        ``"popularity_biased"`` draws proportional to how often each target is
+        rated. Both are seeded by ``seed`` and independent of
+        ``config.random_seed``.
         """
         self._ensure_loaded()
         assert self._stats is not None
@@ -123,6 +126,6 @@ class LibimsetiDataLoader:
             ]
             return sample_popularity_biased(candidates, weights, n, rng)
         raise ValueError(
-            f"unknown negative-sampling strategy {strategy!r}; "
+            f"unknown candidate-sampling strategy {strategy!r}; "
             f"expected {_RANDOM!r} or {_POPULARITY_BIASED!r}"
         )

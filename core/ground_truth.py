@@ -9,6 +9,7 @@ disk so eval runs are reproducible without re-parsing Libimseti.
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
@@ -22,10 +23,15 @@ class EvaluationDataset(BaseModel):
     Typically contains one split (e.g. ``test``) filtered from
     ``DataLoader.load()``. Mutual-match ground truth is derived from these
     interactions via :func:`mutual_match_partners`.
+
+    ``interacted_targets_by_user`` carries the full interaction graph (all
+    splits) so ``eval/`` can sample ranking distractors — users a rater has
+    never interacted with — without importing ``data/``.
     """
 
     split: Split
     interactions: list[ProcessedInteraction] = Field(default_factory=list)
+    interacted_targets_by_user: dict[str, list[str]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _interactions_match_split(self) -> EvaluationDataset:
@@ -45,9 +51,14 @@ class EvaluationDataset(BaseModel):
         *,
         split: Split,
     ) -> EvaluationDataset:
-        """Filter ``interactions`` to a single split."""
+        """Filter ``interactions`` to a single split and attach the full graph."""
         filtered = filter_split(interactions, split)
-        return cls(split=split, interactions=filtered)
+        graph = build_interacted_targets_by_user(interactions)
+        return cls(
+            split=split,
+            interactions=filtered,
+            interacted_targets_by_user=graph,
+        )
 
     def save(self, path: Path) -> None:
         """Write the dataset as human-readable JSON."""
@@ -67,6 +78,16 @@ def filter_split(
 ) -> list[ProcessedInteraction]:
     """Return interactions belonging to ``split``."""
     return [interaction for interaction in interactions if interaction.split == split]
+
+
+def build_interacted_targets_by_user(
+    interactions: list[ProcessedInteraction],
+) -> dict[str, list[str]]:
+    """Map each rater to every target they have ever interacted with (any split)."""
+    by_user: dict[str, set[str]] = defaultdict(set)
+    for interaction in interactions:
+        by_user[interaction.user_id].add(interaction.target_id)
+    return {user_id: sorted(targets) for user_id, targets in sorted(by_user.items())}
 
 
 def mutual_match_partners(

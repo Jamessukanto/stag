@@ -1,8 +1,8 @@
 """The data module: raw Libimseti ratings -> model-ready supervision.
 
-Owns loading, binarization, per-user stratified splitting, and negative
-sampling. Communicates with other modules only through the frozen ``core``
-contracts; it knows nothing about how scores are computed or evaluated.
+Owns loading, binarization, per-user stratified splitting, train-negative
+downsampling, and uninteracted-candidate sampling for eval ranking.
+Communicates with other modules only through the frozen ``core`` contracts.
 """
 
 from __future__ import annotations
