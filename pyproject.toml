@@ -21,7 +21,16 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["core", "data", "data.services", "eval", "models", "experiments"]
+packages = [
+    "core",
+    "data",
+    "data.services",
+    "eval",
+    "models",
+    "models.mf",
+    "models.mf.services",
+    "experiments",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "data", "models", "eval", "experiments"]
