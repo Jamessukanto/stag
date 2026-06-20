@@ -13,6 +13,15 @@ from pydantic import BaseModel, Field
 DEFAULT_AGGREGATIONS: list[str] = ["product", "harmonic", "weighted"]
 
 
+class ModelOverrides(BaseModel):
+    """Per-model training overrides; does not extend frozen ``core.Config``."""
+
+    learning_rate: float | None = None
+    l2_weight: float | None = None
+    early_stopping_patience: int | None = None
+    mlp_layers: list[int] | None = None
+
+
 class ExperimentRunConfig(BaseModel):
     """Orchestration settings: shared Config plus experiments-only fields."""
 
@@ -23,6 +32,21 @@ class ExperimentRunConfig(BaseModel):
     ncf_distractors: int = 100
     weighted_alpha: float = 0.5
     results_dir: Path = Path("experiments/results")
+    model_overrides: dict[str, ModelOverrides] = Field(default_factory=dict)
+    policy_k: int = Field(default=10, gt=0)
+    policy_aggregation: str = "harmonic"
+
+
+def training_config_for_model(base: Config, overrides: ModelOverrides | None) -> Config:
+    """Return a ``Config`` copy with shared-field overrides applied for one model."""
+    if overrides is None or overrides.learning_rate is None:
+        return base
+    return base.model_copy(update={"learning_rate": overrides.learning_rate})
+
+
+def model_override(config: ExperimentRunConfig, model_name: str) -> ModelOverrides | None:
+    """Look up optional overrides for ``mf`` or ``neumf``."""
+    return config.model_overrides.get(model_name)
 
 
 def load_run_config(path: Path) -> ExperimentRunConfig:

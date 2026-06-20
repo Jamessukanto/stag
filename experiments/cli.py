@@ -18,9 +18,14 @@ def main(argv: list[str] | None = None) -> None:
         required=True,
         help="Path to run config JSON",
     )
+    parser.add_argument(
+        "--policy-analysis",
+        action="store_true",
+        help="After eval, write policy_tradeoff.json (engagement vs mutual Recall@K)",
+    )
     args = parser.parse_args(argv)
     config = load_run_config(args.config)
-    result = run_pipeline(config)
+    result = run_pipeline(config, policy_analysis=args.policy_analysis)
     print(render_markdown_table(result.table))
 
 

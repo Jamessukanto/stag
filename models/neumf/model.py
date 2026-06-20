@@ -74,6 +74,7 @@ class NeuMFModel:
 
         best_val_loss = float("inf")
         epochs_without_improvement = 0
+        best_state: dict[str, torch.Tensor] | None = None
         for epoch in range(self._config.epochs):
             train_epoch(
                 self._network,
@@ -90,8 +91,16 @@ class NeuMFModel:
                     epochs_without_improvement=epochs_without_improvement,
                     patience=self._early_stopping_patience,
                 )
+                if val_loss <= best_val_loss:
+                    best_state = {
+                        key: value.detach().clone()
+                        for key, value in self._network.state_dict().items()
+                    }
                 if stop:
                     break
+
+        if best_state is not None:
+            self._network.load_state_dict(best_state)
 
         assert self._network is not None
         assert self._user_index is not None

@@ -6,6 +6,7 @@ import pytest
 import torch
 from core.config import Config
 from core.types import ProcessedInteraction, UserIndex
+from models.neumf.model import NeuMFModel
 from models.neumf.services.network import NeuMFNetwork, default_mlp_layers
 from models.neumf.services.training import (
     compute_split_bce,
@@ -90,3 +91,38 @@ class TestDeterministicTraining:
         weights_b = _train_once()
         for name in weights_a:
             assert torch.allclose(weights_a[name], weights_b[name])
+
+
+class TestEarlyStoppingCheckpoint:
+    def test_restores_best_validation_weights_not_last_epoch(
+        self,
+        neumf_config: Config,
+        processed_interactions: list[ProcessedInteraction],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """After early stop, artifact weights must match the best-val epoch."""
+        val_sequence = [1.0, 0.5, 0.55, 0.6]
+
+        def _mock_val(*_args: object, **_kwargs: object) -> float:
+            return val_sequence.pop(0)
+
+        monkeypatch.setattr("models.neumf.model.compute_split_bce", _mock_val)
+
+        reference = NeuMFModel(
+            neumf_config.model_copy(update={"epochs": 2}),
+            early_stopping_patience=100,
+        )
+        reference.fit(processed_interactions)
+        ref_scores = {
+            ("u1", "u2"): reference.directional_score("u1", "u2"),
+            ("u3", "u4"): reference.directional_score("u3", "u4"),
+        }
+
+        val_sequence = [1.0, 0.5, 0.55, 0.6]
+        stopped = NeuMFModel(
+            neumf_config.model_copy(update={"epochs": 10}),
+            early_stopping_patience=2,
+        )
+        stopped.fit(processed_interactions)
+        for pair, expected in ref_scores.items():
+            assert stopped.directional_score(*pair) == pytest.approx(expected, rel=1e-5)

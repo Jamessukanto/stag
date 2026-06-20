@@ -55,3 +55,26 @@ class TestExperimentRunConfig:
         data = json.loads(out.read_text(encoding="utf-8"))
         assert data["base"]["random_seed"] == 1
         assert data["eval_split"] == "test"
+
+    def test_json_round_trip_with_model_overrides(self, tmp_path: Path) -> None:
+        from experiments.config import ModelOverrides
+
+        flat = {
+            "embedding_dim": 8,
+            "learning_rate": 0.01,
+            "epochs": 10,
+            "model_overrides": {
+                "neumf": {
+                    "learning_rate": 0.005,
+                    "early_stopping_patience": 5,
+                }
+            },
+        }
+        path = tmp_path / "overrides.json"
+        path.write_text(json.dumps(flat), encoding="utf-8")
+        loaded = load_run_config(path)
+        assert loaded.base.learning_rate == 0.01
+        assert loaded.model_overrides["neumf"] == ModelOverrides(
+            learning_rate=0.005,
+            early_stopping_patience=5,
+        )

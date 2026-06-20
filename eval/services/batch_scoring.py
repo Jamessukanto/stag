@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.typing as npt
-
 from core.serialization import ModelArtifact
 
 
@@ -31,7 +30,10 @@ def _batch_directional_scores(
     if program is None:
         source = _resolve_tensor(artifact, "source_embeddings")
         target = _resolve_tensor(artifact, "target_embeddings")
-        return np.sum(source[source_indices] * target[target_indices], axis=1)
+        return np.asarray(
+            np.sum(source[source_indices] * target[target_indices], axis=1),
+            dtype=np.float64,
+        )
 
     env: dict[str, npt.NDArray[np.float64]] = {}
     last: str | None = None
@@ -117,6 +119,25 @@ def batch_reciprocal_scores(
         aggregation,
         weighted_alpha=weighted_alpha,
     )
+
+
+def rank_by_engagement_score_batch(
+    *,
+    candidate_ids: list[str],
+    candidate_indices: npt.NDArray[np.intp],
+    rater_idx: int,
+    artifact: ModelArtifact,
+) -> list[str]:
+    """Rank candidates by directional score s(rater -> candidate) only."""
+    if candidate_indices.size == 0:
+        return []
+    rater = np.full(candidate_indices.shape[0], rater_idx, dtype=np.intp)
+    scores = _batch_directional_scores(artifact, rater, candidate_indices)
+    order = sorted(
+        range(len(candidate_ids)),
+        key=lambda i: (-float(scores[i]), candidate_ids[i]),
+    )
+    return [candidate_ids[i] for i in order]
 
 
 def rank_by_reciprocal_score_batch(

@@ -25,12 +25,17 @@ class TestCheckedInConfigs:
         cfg = load_run_config(_PROTOTYPE_CONFIG)
         assert cfg.base.data_path == Path("data/ratings.local.dat")
         assert cfg.base.artifact_dir == Path("artifacts/prototype")
-        assert cfg.base.embedding_dim == 4
-        assert cfg.base.epochs == 3
-        assert cfg.base.k_values == [2, 5]
+        assert cfg.base.embedding_dim == 16
+        assert cfg.base.learning_rate == 0.01
+        assert cfg.base.epochs == 30
+        assert cfg.base.k_values == [5]
+        assert cfg.base.negative_downsample_ratio == 2.0
         assert cfg.aggregations == ["product", "harmonic"]
-        assert cfg.ncf_distractors == 4
+        assert cfg.ncf_distractors == 10
         assert cfg.results_dir == Path("experiments/results/prototype")
+        neumf = cfg.model_overrides["neumf"]
+        assert neumf.learning_rate == 0.005
+        assert neumf.early_stopping_patience == 5
 
     def test_benchmark_config_loads(self) -> None:
         cfg = load_run_config(_BENCHMARK_CONFIG)
