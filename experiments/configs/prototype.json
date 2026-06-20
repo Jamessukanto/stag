@@ -1,16 +1,22 @@
 {
   "data_path": "data/ratings.local.dat",
   "artifact_dir": "artifacts/prototype",
-  "embedding_dim": 8,
-  "learning_rate": 0.02,
-  "epochs": 10,
+  "embedding_dim": 16,
+  "learning_rate": 0.01,
+  "epochs": 30,
   "k_values": [5],
-  "negative_downsample_ratio": 1.0,
+  "negative_downsample_ratio": 2.0,
   "random_seed": 42,
   "eval_split": "test",
   "sampling_strategy": "random",
   "aggregations": ["product", "harmonic"],
   "ncf_distractors": 10,
   "weighted_alpha": 0.5,
-  "results_dir": "experiments/results/prototype"
+  "results_dir": "experiments/results/prototype",
+  "model_overrides": {
+    "neumf": {
+      "learning_rate": 0.005,
+      "early_stopping_patience": 5
+    }
+  }
 }
