@@ -9,7 +9,8 @@ description = "Modular reciprocal recommendation system built on the Reciprocal 
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2",
-    "numpy",
+    "numpy>=1.26,<2",
+    "torch",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,8 @@ packages = [
     "models",
     "models.mf",
     "models.mf.services",
+    "models.neumf",
+    "models.neumf.services",
     "experiments",
 ]
 
@@ -46,7 +49,7 @@ warn_unused_configs = true
 files = ["core", "data", "eval", "models", "experiments", "tests", "conftest.py"]
 
 [[tool.mypy.overrides]]
-module = ["numpy.*"]
+module = ["numpy.*", "torch.*"]
 ignore_missing_imports = true
 
 [tool.ruff]
@@ -110,6 +113,6 @@ type = "forbidden"
 source_modules = ["experiments"]
 forbidden_modules = [
     "data.services",
-    "models.mf",
-    "models.neumf",
+    "models.mf.services",
+    "models.neumf.services",
 ]
