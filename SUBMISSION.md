@@ -1,144 +1,145 @@
-# Project Brief: Modular Reciprocal Recommendation Engine
+# Liminal Assessment Submission — Reciprocal Preference Pipeline
 
-## 1. Problem Framing
+**Summary.** I used a Tinder-style swipe scenario (like=1, dislike=0) as a test of AI-assisted engineering: a modular Libimseti train + eval pipeline with strict boundaries, built in parallel across six Cursor-driven modules. 
 
-### 1.1 Challenge
-
-Matching platforms (e.g. dating and social discovery apps) optimize for engagement - swipes, likes, messages. But engagement is one-sided. A profile recommendation creates value only when both users mutually prefer each other. This mismatch produces profile cycling and interactions that go nowhere.
-
-The challenge is not ranking relevant profiles, but identifying pairs with a high probability of **mutual** preference.
-
-### 1.2 Why this is intersting to me
-
-Most recommender systems (e.g. Netflix) are user–item problems where only one side expresses preference. I initially framed it as “Netflix for dating”, but it breaks down as social matching is inherently a negotiation - there's no clear producer–consumer split. This creates design tensions absent in one-sided systems:
-1. Attraction is often asymmetric, with one side typically having more influence.
-2. Preferences are malleable: users trade convenience (e.g. distance, effort) for perceived quality.
-3. Standard metrics (NDCG, Precision@K) mislead when the goal is mutual preference, not unilateral relevance
+Matrix Factorization, MF, from [REF (Ramanathan et al., AAAI 2021)](https://cdn.aaai.org/ojs/17807/17807-13-21301-1-2-20210518.pdf) and Neural Collaborative Filtering, NCF, [He et al., 2017](https://arxiv.org/pdf/1708.05031) ship equations with no code. I implemented both and golden-tested save/load so eval scoring matches training. 
 
 ---
 
-## 2. Solution Design
+![Tinder swipe interface reference](tinder.png)
 
-### 2.1 How I Use AI
+## 1. Choose and frame the problem
 
-#### 2.1.1 Design decisions, literature review with Claude and Manus
+### 1.1 The scenario
 
-- Summarize research papers
-- Adversarial framing surfaces  constraints a summary misses. Argue both sides of a specific tradeoff:
-    - Example prompt "Given sparse interaction data, is naive aggregation or REF preferable — and what's the strongest case against your own recommendation?" 
-- Challenge the problem framing itself. 
-    - Example prompt: "When is one-sided optimisation actually better than reciprocal?" 
+Binary swipe: like=1, dislike=0. A match requires both users to like. Most feeds rank by engagement ("whom you like"), not mutual fit ("whom you like who would like you back"). This surfaces one-sided crushes and profile cycling.
 
-#### 2.1.2 Code implementation with Cursor Agent
+**Challenge:** rank for mutual preference.
 
-A meta prompt (`prompts/0_initial_meta_prompt.md`) plans each chat session; its outputs in `prompts/` are pasted into separate Plan Mode chats (`*_init.md` → review plan → **Build**). Each prompt carries its own Build requirements (TDD loop + boundaries), and project-wide rules live in `.cursor/rules/`. One session per module; modules communicate only through committed artifacts and `core/` contracts. 
+### 1.2 Why this is interesting to me
+
+I initially framed it as “Netflix for dating,” but social matching is inherently a negotiation (no producer–consumer split):
+
+1. Attraction is asymmetric; one side often has more influence on outcomes.
+2. Preferences are malleable: users trade off quality against convenience (distance, effort).
+
+Plus, I selected the problem to explore a new domain.
+
+---
+
+## 2. Design the solution
+
+I built a **modular offline train + eval pipeline** and compared two plug-in preference models: [MF](https://cdn.aaai.org/ojs/17807/17807-13-21301-1-2-20210518.pdf) and [NCF](https://arxiv.org/pdf/1708.05031). Each model produces directional scores only; reciprocal fusion happens in `eval/` at ranking time.
+
+**Out of scope:** swipe UI (would only re-sort `comparison.json` — answered offline via `policy_tradeoff.json` instead); modelling chemistry, logistics, transient intent.
+
+### 2.1 Paper-to-code (no reference implementation)
+
+Papers provide losses and architectures, not a Libimseti pipeline, artifact format, or model-agnostic evaluator.
+
+| Layer | AI role | My role |
+|-------|---------|---------|
+| Literature review | Summarization | Adversarial prompts - e.g. “Do you recommend X or Y? What’s the strongest case against your recommendation?” |
+| Libimseti dataset preprocessing | Implementation | Binarize (≥7 = like), per-user split, subgraph sampling; random per-user stratified train/val/test |
+| MF / NCF mechanics | Implement equations  | Verify |
+| Module boundaries, architecture | Implementation | Design so `eval/` never imports `models/` |
+| Trust | TDD, import-linter guardrails | Verify |
+
+### 2.2 AI workflow (Cursor Agent)
+
+I wrote the **meta-prompt** [`prompts/0_initial_meta_prompt.md`](prompts/0_initial_meta_prompt.md) which plans all cursor sessions, and corresponding prompts. Each module = 1 session with an init prompt in [`prompts/*_init.md`](prompts/). 
+
+Workflow: paste init → review plan → Build → `pytest` + import-linter → commit. 
 
 ```
-Chat session execution order:
-
-Architecture → [Data, MF, NeuMF, Evaluation] (parallel) → Experiments → API → Frontend
+# Chat session execution order: 
+Architecture → [Data, MF, NCF, Evaluation] (parallel) → Experiments
 ```
 
-| Mechanism | Details |
-|------------|---------|
-| Project rules | `pytest`; type hints; never modify tests to fit implementations |
-| TDD | Write tests → verify failures → implement → pass |
-| Code-structure skill | Module boundaries via the [code-structure skill](https://github.com/michaelshimeles/skills/blob/main/code-structure/SKILL.md) |
+#### 2.2.1 Guardrails
 
-
-### 2.2 Scope
-
-A modular reciprocal recommendation system and configurable evaluation pipeline built on the . We compare 2 models:
-
-- **Matrix Factorization** — [Reciprocal Embedding Framework (REF; Ramanathan et al., AAAI 2021)](https://cdn.aaai.org/ojs/17807/17807-13-21301-1-2-20210518.pdf) linear, dot-product directional score (REF, Eq. 1–2)
-- **NeuMF** — [NeuMF (He et al., NCF, 2017)](https://arxiv.org/pdf/1708.05031) non-linear directional score (GMF + MLP)
-
-
-**Excluded**: chemistry, logistics, transient intent — difficult to observe or evaluate reliably.
-
-### 2.3 Dataset
-
-Libimseti (Czech dating site; ~135k users, millions of directional ratings on a **1–10 scale**). One of the few public datasets with explicit bidirectional interaction data suited to reciprocal recommendation research.
-
-**Binarization**: rating ≥ 7 → positive (like); rating < 7 → **explicit** negative (dislike). We train on full binary supervision (see 2.4), and use negative sampling for ablation.
-
-**Split**: Libimseti carries no timestamps so temporal cutoffs are not possible. Random per-user holdout into train/validation/test. Stratified per user to keep every user represented across splits.
-
-### 2.4 Models
-
-Both models sit inside the REF framework. Each user u carries two embeddings:
-
-- p_u — source: how user u selects others
-- q_u — target: how others select u
-
-Each preference model produces a **directional** score s(u→v) using u's source-side and v's target-side representations (e.g. s(u→v) = p_u^T q_v for MF). The reciprocal score is assembled only at eval/ranking time:
-
-r(A,B) = f(s(A→B), s(B→A))
-
-where **f** is an aggregation function (product, harmonic mean, or weighted mean). 
-
-**Training signal (directional, not mutual-match):** Loss compares s(u→v) to that single-direction label — models never train on r(A,B) or mutual-match labels. Train-negative downsampling (default on) thins explicit dislikes in the **train** split only.
-
-**Eval ground truth (mutual-match):** a pair (A,B) is relevant only when **both** A→B and B→A are likes in the held-out split. This is derived at eval time via `core.ground_truth.mutual_match_partners`, not stored as a separate training label.
-
-<details>
-<summary><strong>2.4.1 Matrix Factorization (REF, Eq. 1–2)</strong></summary>
-
-Directional score is the inner product of the source and target embeddings:
-
-- s(u→v) = p_u^T · q_v
-
-Trained as weighted matrix factorization, minimizing a regularized squared loss with L2 regularization over the binary labels, via SGD/Adam. Linear and scalable, but the dot product is a fixed interaction function.
-
-</details>
-
-<details>
-<summary><strong>2.4.2 Neural Network — NeuMF (He et al., NCF, 2017)</strong></summary>
-
-Replaces the dot product with a learned, non-linear interaction function. NeuMF fuses two branches over separate embeddings:
-
-- **GMF**: element-wise product p_u^G ⊙ q_v^G (a generalized matrix factorization)
-- **MLP**: concatenate [p_u^M ; q_v^M], then stacked ReLU layers in a tower structure
-
-Their last hidden layers are concatenated and projected through a sigmoid output to produce s(u→v), trained with binary cross-entropy (log loss). Like MF, NeuMF uses **u’s source-side and v’s target-side** embeddings (not p_u · p_v). Aggregation into r(A,B) lives in `eval/`, not here.
-
-</details>
-
-
-### 2.5 Evaluation Metrics
-
-`eval/` loads a `ModelArtifact`, reconstructs s(u→v), applies **f** to get r(A,B), ranks candidates, and reports metrics. **REF** and **NCF** here name **metric protocols**, not which model runs them — MF and NeuMF both get all three metrics.
-
-| Metric | Protocol | Candidate pool | What it measures |
-|--------|----------|----------------|------------------|
-| **Recall@K** | REF | All other users in the artifact | Fraction of a user's mutual-match partners in top-K |
-| **HR@K** | NCF | 1 held-out partner + 100 uninteracted distractors | Hit rate (binary) per leave-one-out trial |
-| **NDCG@K** | NCF | Same as HR@K | Rank-discounted gain per trial (one relevant item) |
-
-HR@K and NDCG@K hold out **one** mutual-match partner per trial and average over all trials. Recall@K ranks **all** of a user's mutual-match partners together against the full user pool.
+- **Module boundaries.** This enables parallel sessions. [`.cursor/rules/`](.cursor/rules/) + `import-linter`: modules talk via `core/` types and `ModelArtifact` JSON only — four parallel sessions without import spaghetti.
+- **Save/load golden tests.** Every model passes `verify_scorer_matches_directional` after serialization ([`tests/test_scoring_golden.py`](tests/test_scoring_golden.py)).
+- **Code structure + TDD.** Cursor skills to maintain modularity and prevent logic duplication; tests first, never patch tests to fit bad impl.
 
 ---
 
-## 3. Prototype
+## 3. Prove it (2 artifacts and a policy observation)
 
-The prototype implements the design above: `core/`, `data/`, `models/mf/`, `models/neumf/`, `eval/`, and `experiments/` with tests. It trains MF and NeuMF on a local Libimseti subgraph and runs the full evaluation pipeline.
+### 3.1 Modular pipeline (Load → train MF + NCF → evaluate → comparison table)
 
-Setup, dataset generation, CLI usage, and module reference: **[README.md](README.md)**.
+```bash
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest && python -m importlinter.cli && mypy && ruff check .
+
+python -m experiments.cli --config experiments/configs/prototype.json
+```
+
+Outputs: `artifacts/prototype/`, `experiments/results/prototype/comparison.json`, optional `policy_tradeoff.json`.
+
+**Smoke test** (`ratings.local.dat`, ~120k rows, 10 distractors — not full Libimseti):
+
+| Model | Aggregation | Recall@5 | HR@5 | NDCG@5 |
+|-------|-------------|----------|------|--------|
+| MF | product | 0.00 | 0.82 | 0.51 |
+| MF | harmonic | 0.00 | 0.81 | 0.49 |
+| NCF | product | 0.00 | 0.83 | 0.59 |
+| NCF | harmonic | 0.00 | 0.83 | 0.59 |
+
+Note that Recall@5 = 0 is expected; HR@5 inflated by tiny distractor pool; NCF NDCG edge is weak signal only.
+
+### 3.2 Prompt system
+
+| Artifact | Location |
+|----------|----------|
+| Meta-prompt | [`prompts/0_initial_meta_prompt.md`](prompts/0_initial_meta_prompt.md) |
+| Per-module prompts | [`prompts/1_architecture.md`](prompts/1_architecture.md) … [`prompts/6_experiments_init.md`](prompts/6_experiments_init.md) |
+| Checklist | [`prompts/README.md`](prompts/README.md) |
+
+### 3.3 Policy insight — 2 ways to rank the feed
+
+| Feed | Sort by | Meaning |
+|------|---------|---------|
+| Engagement | `s(u→v)` | Predicted strength of u liking v |
+| Mutual | `r(u,v) = f(s(u→v), s(v→u))` | Predicted strength of mutual liking (harmonic / product) |
+
+```bash
+python -m experiments.cli --config experiments/configs/prototype.json --policy-analysis
+```
+
+For 670 users with a held-out mutual match, rank everyone else both ways and compare Recall@10 ([`eval/services/policy_comparison.py`](eval/services/policy_comparison.py)). Output: [`experiments/results/prototype/policy_tradeoff.json`](experiments/results/prototype/policy_tradeoff.json).
+
+**Finding on test set:** 
+Whenever the two feeds disagree on who should be **#1**, the engagement pick is **never** a real mutual match. 
+
+**Why this matters:** If you ship engagement ranking, your top recommendation can systematically be someone who would not match back.
 
 ---
 
-## 4. Impact Analysis
+## 4. Analyze the impact
 
-### 4.1 On using AI
+### 4.1 Before vs after
 
+| | Without AI assistance | With this workflow |
+|---|----------------------|-------------------|
+| **Scope** | One model, ad-hoc scripts, eval coupled to training | Six modules, two models, model-agnostic eval — parallel Cursor sessions |
+| **Trust** | "Tests pass" | Golden save/load + import-linter on artifact seam |
+| **Product question** | Debate in a deck | `--policy-analysis` → `policy_tradeoff.json` |
 
-| Dimension | Without AI | With AI | Tradeoff / Limitation |
-|---|---|---|---|
-| Literature review | Slow manual reading | Faster targeted exploration | Summaries still required verification |
-| Implementation scope | One model, minimal pipeline | Multiple models and sampling strategies | More complexity to validate |
-| Debugging | Manual iteration | Test-driven iteration with Cursor | Passing tests ≠ correctness |
+**Tradeoff:** upfront architecture cost; integration and interpretation still sequential.
 
-What I'd need to learn next:
+### 4.2 Where human judgment still mattered
 
-- Graph neural networks, to capture higher-order interaction structure.
-- Cold-start methods, combining profile features with interaction data.
+- **Demo pressure on swipe UI** — Swipe UI makes look complete but adds 
+no inference.
+- **Honest reporting** — report #1 trap rate, not inflated HR@5.
+The actionable signal is the #1 disagreement pattern, not HR@5 inflated 
+by only 10 distractors.
+- **Paper claims** — verify agent summaries against PDFs.
+
+### 4.3 Taking this further
+
+Two gaps:
+- **Does the policy finding hold?** Full Libimseti benchmark; cold-start (Libimseti has no photos, bios, distance).
+- **Does the workflow transfer?** Frozen `core/` contracts for parallel agents; [`prompts/`](prompts/) as handoff spec for the next engineer — not yet proven on another codebase.

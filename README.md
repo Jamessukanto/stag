@@ -1,156 +1,116 @@
-# Reciprocal Recommendation Engine
+# Reciprocal Preference Pipeline
 
-**Status:** `core/`, `data/`, `models/mf/`, `models/neumf/`, `eval/`, and `experiments/` are implemented with tests.
+Offline train + eval pipeline for reciprocal preference scorer on [Libimseti dataset](https://networkrepository.com/libimseti.php). Models: Matrix Factorization, MF, from [REF (Ramanathan et al., AAAI 2021)](https://cdn.aaai.org/ojs/17807/17807-13-21301-1-2-20210518.pdf) and Neural Collaborative Filtering, NCF, [He et al., 2017](https://arxiv.org/pdf/1708.05031)
+
+## Layout
+
+```
+core/           types, ModelArtifact, scoring interpreter, config
+data/           load, binarize, split, downsample
+models/mf/      matrix factorization (REF)
+models/neumf/   NCF / NCF (He et al.)
+eval/           aggregation, metrics, policy comparison — never imports models/
+experiments/    CLI + orchestration
+prompts/        Cursor Plan/Build prompts (assessment artifact)
+```
+
+**Boundaries:** modules communicate via `core/` contracts and on-disk artifacts only. `eval/` scores from `ModelArtifact` JSON via `core.scoring.reconstruct_scorer` — no PyTorch imports. Golden tests enforce save/load score parity.
+
+## Quick start
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest && python -m importlinter.cli && mypy && ruff check .
+pytest && python -m importlinter.cli && ruff check .
 ```
 
-**Prototype dataset:** `data/ratings.local.dat` is not checked in. It is a **closed user subgraph** of [Libimseti](https://networkrepository.com/libimseti.php): sample mutual-like pairs to pick a user cohort, then keep **every** rating (likes, dislikes, one-sided) where **both** endpoints are in that set. Capped at **120,000** directed rows by default. Includes explicit negatives so training has contrast; still smaller and faster than the full benchmark.
-
-Generate once from a full download:
-
-```bash
-mkdir -p data
-curl -L -o /tmp/libimseti.zip https://nrvis.com/download/data/misc/libimseti.zip
-unzip -p /tmp/libimseti.zip libimseti.edges | grep -v '^%' > data/ratings.dat
-
-python scripts/generate_ratings_local.py   # → data/ratings.local.dat
-```
-
-Optional flags: `--target-pairs` (seed cohort size), `--max-directed-edges` (default 120000; use `0` for no cap). Do not use `head` on the raw file — early lines are one-directional and produce zero reciprocal eval signal.
-
-**Run the pipeline** (load → train MF + NeuMF → evaluate → comparison table). All settings live in `experiments/configs/prototype.json`:
+Download [Libimseti dataset](https://nrvis.com/download/data/misc/libimseti.zip). Sample and store locally `data/ratings.local.dat` for a smoke test run, then:
 
 ```bash
 python -m experiments.cli --config experiments/configs/prototype.json
+python -m experiments.cli --config experiments/configs/prototype.json --policy-analysis
 ```
 
-Writes artifacts to `artifacts/prototype/` and results to `experiments/results/prototype/` (`comparison.json`, `comparison.csv`, `resolved_config.json`).
+**Outputs:** `artifacts/prototype/{mf,neumf}.json`, `experiments/results/prototype/{comparison.json,comparison.csv,resolved_config.json}`; with `--policy-analysis`, also `policy_tradeoff.json`.
 
-### Prototype vs benchmark
+## Data
 
-**Prototype numbers are not comparable to benchmark numbers.** They answer different questions:
+**Binarization:** rating ≥ 7 → like (`1`), else dislike (`0`). Per-user stratified train/val/test; train negatives downsampled when `downsample=True`.
 
-| | Prototype (`prototype.json`) | Benchmark (`benchmark.json`) |
-|--|------------------------------|------------------------------|
-| **Purpose** | Fast end-to-end smoke test | Meaningful model comparison on full Libimseti |
-| **Data** | `ratings.local.dat` (~120k-row subgraph) | `ratings.dat` (~17M ratings) |
-| **Training** | dim 4, 5 epochs | dim 32, 20 epochs |
-| **NCF pool** | 7 distractors (8 candidates) | 100 distractors (101 candidates) |
-| **Metrics** | HR@5 can look high; Recall@K stays tiny | Recall@K and HR@K reflect full-scale ranking |
+**Prototype slice:** Preserves mutual likes, one-sided likes, and dislikes. Do not use `head` on the raw file — early rows lack reciprocal signal.
 
-Do not cite prototype HR/Recall as Libimseti benchmark results. Use `experiments/configs/benchmark.json` on `data/ratings.dat` when you need scores for a write-up or comparison.
 
-<details>
-<summary><strong>Matrix Factorization (MF)</strong></summary>
+## Pipeline
 
-Public entry point: `MatrixFactorizationModel(config, *, sampling_strategy="random", l2_weight=0.01)` — conforms to `core.PreferenceModel`.
-
-| Method | Behavior |
-|--------|----------|
-| `fit(interactions)` | Trains on `split=="train"` rows only; builds `UserIndex` from all users in the input list |
-| `directional_score(user_u, target_v)` | `p_u^T q_v` via learned embeddings |
-| `save(path)` / `load(path)` | Writes/reads a `ModelArtifact` with `model_name="mf"` (no `score_program`; eval uses default dot product) |
-
-**Hyperparameters:** shared run settings (`embedding_dim`, `learning_rate`, `epochs`, `negative_downsample_ratio`, `random_seed`) come from `core.Config`. MF-specific settings ride on the model constructor and are persisted in `ModelArtifact.hyperparameters` — notably `l2_weight` (default `0.01`) and `optimizer: "adam"`. `core.Config` intentionally excludes model-specific fields so the shared contract stays stable when swapping MF for NeuMF.
-
-Train-negative downsampling is **not** applied in `fit()`; the caller passes the interaction list from `LibimsetiDataLoader(downsample=True).load()`. The model records `negative_downsample_ratio` in the artifact for provenance only.
-
-Mechanics live in `models/mf/services/` (embeddings, loss, training, artifact). `models/mf/` imports only `core/`; it never imports `data/` or `eval/`.
-
-</details>
-
-<details>
-<summary><strong>NeuMF</strong></summary>
-
-Public entry point: `NeuMFModel(config, *, sampling_strategy="random")` — conforms to `core.PreferenceModel`.
-
-| Method | Behavior |
-|--------|----------|
-| `fit(interactions)` | Trains on `split=="train"`; uses val for early stopping |
-| `directional_score(user_u, target_v)` | GMF + MLP branches → sigmoid s(u→v) |
-| `save(path)` / `load(path)` | Writes/reads a `ModelArtifact` with `model_name="neumf"` and a `score_program` in `extra` for eval |
-
-NeuMF keeps separate GMF and MLP embedding tables per user (source/target roles), but like MF it produces **directional scores only**. Reciprocal fusion and metrics are unchanged — handled entirely by `eval/`.
-
-Mechanics live in `models/neumf/services/` (network, loss, training, artifact). `models/neumf/` imports only `core/`; it never imports `data/`, `eval/`, or `models/mf/`.
-
-</details>
-
-<details>
-<summary><strong>Experiments</strong></summary>
-
-Public entry point: `python -m experiments.cli --config experiments/configs/<prototype|benchmark>.json` or `from experiments import run_pipeline, ExperimentRunConfig`.
+Load → train MF + NCF → eval metric sweep → optional policy analysis.
 
 | Step | What happens |
 |------|----------------|
 | Load | `LibimsetiDataLoader(config, downsample=True).load()` |
-| Train | MF → `artifacts/mf.json`, NeuMF → `artifacts/neumf.json` |
-| Eval | `EvaluationDataset.from_interactions(..., split="test")` + `ReciprocalEvaluator` sweep |
-| Output | `experiments/results/comparison.json` (model × aggregation × k → Recall@K, HR@K, NDCG@K) |
+| Train | MF + NCF → `ModelArtifact` JSON |
+| Eval | Test-split `EvaluationDataset`; Recall@K, HR@K, NDCG@K per model × aggregation |
+| Policy | `--policy-analysis`: rank by `s(u→v)` vs `r(u,v)`; write `policy_tradeoff.json` |
 
-`ExperimentRunConfig` wraps `core.Config` with orchestration-only fields: `eval_split`, `sampling_strategy`, `aggregations`, `ncf_distractors`, `weighted_alpha`, `results_dir`. Config JSON accepts either a nested `"base"` object or flat fields (core settings at the top level alongside experiments fields). One `random_seed` drives splitting, training, and eval distractor sampling.
+Programmatic: `from experiments import run_pipeline, ExperimentRunConfig`.
 
-</details>
+Policy analysis (`--policy-analysis`): compare engagement vs mutual ranking on held-out mutual matches → `policy_tradeoff.json`. See [SUBMISSION.md §3.3](SUBMISSION.md).
 
-<details>
-<summary><strong>Evaluation</strong></summary>
+## Models
 
-Public entry point: `ReciprocalEvaluator(config, *, ncf_distractors=100, weighted_alpha=0.5)`.
+Architecture follows [REF (Ramanathan et al., 2021)](https://cdn.aaai.org/ojs/17807/17807-13-21301-1-2-20210518.pdf). Each user *u* plays two roles on a directed edge *u→v*:
 
-| Method | Behavior |
-|--------|----------|
-| `evaluate(artifact_path, ground_truth, aggregation, k)` | Load artifact → rank by r(A,B) → return `EvaluationResult` |
+| Symbol | Meaning |
+|--------|---------|
+| **p_u** | Source embedding — *u* as rater |
+| **q_v** | Target embedding — *v* as candidate |
+| **s(u→v)** | Directional score — predicted strength of *u* liking *v* |
+| **s(v→u)** | Reverse direction |
+| **r(u,v)** | Reciprocal score — both directions fused (eval only) |
 
-Aggregators: `"product"`, `"harmonic"`, `"weighted"`. Reads `ModelArtifact` JSON only — never imports `models/`. Ground truth arrives as `EvaluationDataset` (built by the caller from the eval split); mutual-match partners come from `core.ground_truth.mutual_match_partners`.
+Both plug-in models implement **s(u→v)** only. **r(u,v) = f(s(u→v), s(v→u))** is computed in `eval/` ([`eval/services/aggregators.py`](eval/services/aggregators.py)):
 
-Mechanics live in `eval/services/` (aggregators, ranking, candidate sampling, metrics). `eval/` imports only `core/`.
+| `f` | Formula |
+|-----|---------|
+| `product` | r = s(u→v) · s(v→u) |
+| `harmonic` | r = 2·s(u→v)·s(v→u) / (s(u→v) + s(v→u)) |
+| `weighted` | r = α·s(u→v) + (1−α)·s(v→u) |
 
-</details>
+Engagement ranking sorts by **s(u→v)**; mutual ranking sorts by **r(u,v)**.
 
-<details>
-<summary><strong>Architecture</strong></summary>
+### MF — linear (REF)
 
-### Layout
-
-```
-core/         shared types, Protocols, ModelArtifact, scoring interpreter, config
-data/         Libimseti loading, binarization, splits, negative sampling
-models/mf/    matrix-factorization preference model (plug-in)
-models/neumf/ NeuMF preference model (plug-in)
-eval/         aggregation, ranking, metrics — never imports models/
-experiments/  orchestrates load → train → evaluate
-artifacts/    serialized ModelArtifact JSON (+ optional EvaluationDataset JSON)
-```
-
-Feature modules (`data/`, `models/`, `eval/`) sit beside `core/` at the repo root. Only `core/` is imported by everyone; siblings never import each other's internals.
-
-### How eval scores models (without importing them)
-
-`eval/` reads **`ModelArtifact`** JSON only — never `models/`. Each file holds learned weights plus an optional `score_program` (step list for non-linear models). `core.scoring.reconstruct_scorer` runs it; same path for every model.
-
-| Model | Directional score s(u→v) | Reciprocal score r(A,B) |
-|-------|--------------------------|-------------------------|
-| MF | Dot product `p_u · q_v` (default when no program) | `eval/` only: f(s(A→B), s(B→A)) |
-| NeuMF | `score_program` in `extra` (lookup → concat → dense → sigmoid) | same |
-
-Golden tests (`verify_scorer_matches_directional`) keep the interpreter aligned with each model's `directional_score`. Aggregation is identical for both artifacts.
-
-### Data flow
+[`models/mf/`](models/mf/) — REF directional dot product:
 
 ```
-ratings.local.dat → data/ → ProcessedInteraction[]
-                         ↓ train split
-                    models/ → ModelArtifact JSON
-                         ↓
-              experiments/ pairs artifact + EvaluationDataset (test split)
-                         ↓
-                    eval/ → EvaluationResult
+s(u→v) = p_u · q_v     (inner product of source/target embeddings)
 ```
 
-`eval/` never calls `data/` — `experiments/` (or any caller) filters the loaded interactions and passes ground truth in.
+- **Train:** squared loss `(y − s)²` on binary labels, L2 on p_u and q_v, Adam
+- **Score range:** unbounded ℝ
+- **Artifact:** `source_embeddings` (p), `target_embeddings` (q)
 
-</details>
+REF defines reciprocal ranking via **f**; this repo keeps **f** in eval so MF is a pure directional plug-in.
+
+### NCF — non-linear (He et al.)
+
+[`models/neumf/`](models/neumf/) — [NCF](https://arxiv.org/pdf/1708.05031) GMF + MLP on user–user edges:
+
+| Branch | Computation |
+|--------|-------------|
+| **GMF** | element-wise product p_u^G ⊙ q_v^G |
+| **MLP** | concat [p_u^M ; q_v^M] → ReLU tower |
+| **Fusion** | concat(GMF, MLP hidden) → linear → sigmoid → s(u→v) ∈ (0,1) |
+
+- **Train:** binary cross-entropy; val-split early stopping
+- **Artifact:** branch embeddings + MLP weights in `extra`; `score_program` replays forward pass in eval without PyTorch
+
+### MF vs NCF
+
+| | MF (REF) | NCF (NCF) |
+|--|----------|-------------|
+| **s(u→v)** | Linear dot product | GMF + MLP + sigmoid |
+| Loss | Squared error | BCE |
+| Score range | ℝ | (0, 1) |
+| Reciprocal **r** | Fused in eval, not trained on matches | same |
+
+Both implement `PreferenceModel` (`fit`, `directional_score`, `save`/`load`). Golden tests verify eval matches training scores after serialization.
