@@ -23,3 +23,7 @@ env/
 # Generated model artifacts (keep the directory, ignore its contents)
 artifacts/*
 !artifacts/.gitkeep
+
+# Libimseti data (download / generate locally; see README)
+data/ratings.dat
+data/ratings.local.dat
