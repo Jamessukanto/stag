@@ -3,32 +3,32 @@
     "model_name": "mf",
     "aggregation": "product",
     "k": 5,
-    "recall_at_k": 0.003482587064676617,
-    "hr_at_k": 0.7936344969199178,
-    "ndcg_at_k": 0.49495129476269134
+    "recall_at_k": 0.0,
+    "hr_at_k": 0.8069815195071869,
+    "ndcg_at_k": 0.5127068307998565
   },
   {
     "model_name": "mf",
     "aggregation": "harmonic",
     "k": 5,
-    "recall_at_k": 0.002238805970149254,
-    "hr_at_k": 0.7669404517453798,
-    "ndcg_at_k": 0.46510098365179575
+    "recall_at_k": 0.0,
+    "hr_at_k": 0.7946611909650924,
+    "ndcg_at_k": 0.49819977306838537
   },
   {
     "model_name": "neumf",
     "aggregation": "product",
     "k": 5,
-    "recall_at_k": 0.002238805970149254,
-    "hr_at_k": 0.47638603696098564,
-    "ndcg_at_k": 0.2852964448673012
+    "recall_at_k": 0.0,
+    "hr_at_k": 0.8316221765913757,
+    "ndcg_at_k": 0.5803800027533044
   },
   {
     "model_name": "neumf",
     "aggregation": "harmonic",
     "k": 5,
-    "recall_at_k": 0.002238805970149254,
-    "hr_at_k": 0.4794661190965092,
-    "ndcg_at_k": 0.28648061610997766
+    "recall_at_k": 0.0,
+    "hr_at_k": 0.8316221765913757,
+    "ndcg_at_k": 0.5806433133822655
   }
 ]

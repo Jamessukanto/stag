@@ -1,0 +1,26 @@
+[
+  {
+    "model_name": "mf",
+    "aggregation": "harmonic",
+    "k": 10,
+    "users_with_test_mutuals": 670,
+    "mean_recall_engagement": 0.0007462686567164179,
+    "mean_recall_mutual": 0.0,
+    "mean_recall_delta": -0.0007462686567164179,
+    "buried_mutual_rate": 0.0,
+    "top1_trap_rate": 1.0,
+    "example_cases": []
+  },
+  {
+    "model_name": "neumf",
+    "aggregation": "harmonic",
+    "k": 10,
+    "users_with_test_mutuals": 670,
+    "mean_recall_engagement": 0.002238805970149254,
+    "mean_recall_mutual": 0.0,
+    "mean_recall_delta": -0.002238805970149254,
+    "buried_mutual_rate": 0.0,
+    "top1_trap_rate": 1.0,
+    "example_cases": []
+  }
+]
