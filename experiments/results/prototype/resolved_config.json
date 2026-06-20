@@ -1,0 +1,26 @@
+{
+  "base": {
+    "data_path": "data/ratings.local.dat",
+    "artifact_dir": "artifacts/prototype",
+    "train_ratio": 0.7,
+    "val_ratio": 0.15,
+    "test_ratio": 0.15,
+    "embedding_dim": 8,
+    "learning_rate": 0.02,
+    "epochs": 10,
+    "k_values": [
+      5
+    ],
+    "negative_downsample_ratio": 1.0,
+    "random_seed": 42
+  },
+  "eval_split": "test",
+  "sampling_strategy": "random",
+  "aggregations": [
+    "product",
+    "harmonic"
+  ],
+  "ncf_distractors": 10,
+  "weighted_alpha": 0.5,
+  "results_dir": "experiments/results/prototype"
+}

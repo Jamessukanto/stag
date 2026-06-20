@@ -1,0 +1,34 @@
+[
+  {
+    "model_name": "mf",
+    "aggregation": "product",
+    "k": 5,
+    "recall_at_k": 0.003482587064676617,
+    "hr_at_k": 0.7936344969199178,
+    "ndcg_at_k": 0.49495129476269134
+  },
+  {
+    "model_name": "mf",
+    "aggregation": "harmonic",
+    "k": 5,
+    "recall_at_k": 0.002238805970149254,
+    "hr_at_k": 0.7669404517453798,
+    "ndcg_at_k": 0.46510098365179575
+  },
+  {
+    "model_name": "neumf",
+    "aggregation": "product",
+    "k": 5,
+    "recall_at_k": 0.002238805970149254,
+    "hr_at_k": 0.47638603696098564,
+    "ndcg_at_k": 0.2852964448673012
+  },
+  {
+    "model_name": "neumf",
+    "aggregation": "harmonic",
+    "k": 5,
+    "recall_at_k": 0.002238805970149254,
+    "hr_at_k": 0.4794661190965092,
+    "ndcg_at_k": 0.28648061610997766
+  }
+]
