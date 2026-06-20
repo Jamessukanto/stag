@@ -79,5 +79,7 @@ class TestDeterministicTraining:
         model_b.fit(processed_interactions)
         assert model_a._source_embeddings is not None
         assert model_b._source_embeddings is not None
+        assert model_a._target_embeddings is not None
+        assert model_b._target_embeddings is not None
         np.testing.assert_array_equal(model_a._source_embeddings, model_b._source_embeddings)
         np.testing.assert_array_equal(model_a._target_embeddings, model_b._target_embeddings)
