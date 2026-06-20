@@ -26,4 +26,3 @@ artifacts/*
 
 # Libimseti data (download / generate locally; see README)
 data/ratings.dat
-data/ratings.local.dat
