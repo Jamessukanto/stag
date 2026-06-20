@@ -1,6 +1,6 @@
 # Liminal Assessment Submission — Reciprocal Preference Pipeline
 
-**Summary.** I used a Tinder-style swipe scenario (like=1, dislike=0) as a test of AI-assisted engineering: a modular Libimseti train + eval pipeline with strict boundaries, built in parallel across six Cursor-driven modules. 
+**Summary.** I used a Tinder-style swipe scenario (like=1, dislike=0) as a test of AI-assisted engineering: a modular train + eval pipeline for reciprocal preference scoring, built in parallel across six Cursor-driven modules. 
 
 Matrix Factorization, MF, from [REF (Ramanathan et al., AAAI 2021)](https://cdn.aaai.org/ojs/17807/17807-13-21301-1-2-20210518.pdf) and Neural Collaborative Filtering, NCF, [He et al., 2017](https://arxiv.org/pdf/1708.05031) ship equations with no code. I implemented both and golden-tested save/load so eval scoring matches training. 
 
@@ -10,32 +10,30 @@ Matrix Factorization, MF, from [REF (Ramanathan et al., AAAI 2021)](https://cdn.
 
 ## 1. Choose and frame the problem
 
-### 1.1 The scenario
+### 1.1 The problem
 
-Binary swipe: like=1, dislike=0. A match requires both users to like. Most feeds rank by engagement ("whom you like"), not mutual fit ("whom you like who would like you back"). This surfaces one-sided crushes and profile cycling.
+On Tinder app, user swipes right for like=1, and left for dislike=0. A match requires both users to like. Most feeds rank by engagement ("whom you like"), not mutual fit ("whom you like who would like you back"). This surfaces one-sided crushes and profile cycling.
 
 **Challenge:** rank for mutual preference.
 
 ### 1.2 Why this is interesting to me
 
-I initially framed it as “Netflix for dating,” but social matching is inherently a negotiation (no producer–consumer split):
+I wanted to work on a new domain and thought it'd be amusing to work on “Netflix for dating,” but social matching is inherently a negotiation (no producer–consumer split):
 
-1. Attraction is asymmetric; one side often has more influence on outcomes.
+1. Attraction is asymmetric; one side often has more influence.
 2. Preferences are malleable: users trade off quality against convenience (distance, effort).
-
-Plus, I selected the problem to explore a new domain.
 
 ---
 
 ## 2. Design the solution
 
-I built a **modular offline train + eval pipeline** and compared two plug-in preference models: [MF](https://cdn.aaai.org/ojs/17807/17807-13-21301-1-2-20210518.pdf) and [NCF](https://arxiv.org/pdf/1708.05031). Each model produces directional scores only; reciprocal fusion happens in `eval/` at ranking time.
+I built a **modular offline train + eval pipeline for reciprocal preference scoring** and compared 2 preference models: [MF](https://cdn.aaai.org/ojs/17807/17807-13-21301-1-2-20210518.pdf) and [NCF](https://arxiv.org/pdf/1708.05031). Each model produces directional scores only; reciprocal fusion happens at ranking time.
 
 **Out of scope:** swipe UI (would only re-sort `comparison.json` — answered offline via `policy_tradeoff.json` instead); modelling chemistry, logistics, transient intent.
 
 ### 2.1 Paper-to-code (no reference implementation)
 
-Papers provide losses and architectures, not a Libimseti pipeline, artifact format, or model-agnostic evaluator.
+Papers provide losses and architectures, but not the data ingestion + preprocessing, artifact formats, or model-agnostic evaluator.
 
 | Layer | AI role | My role |
 |-------|---------|---------|
@@ -47,9 +45,7 @@ Papers provide losses and architectures, not a Libimseti pipeline, artifact form
 
 ### 2.2 AI workflow (Cursor Agent)
 
-I wrote the **meta-prompt** [`prompts/0_initial_meta_prompt.md`](prompts/0_initial_meta_prompt.md) which plans all cursor sessions, and corresponding prompts. Each module = 1 session with an init prompt in [`prompts/*_init.md`](prompts/). 
-
-Workflow: paste init → review plan → Build → `pytest` + import-linter → commit. 
+I wrote a **meta-prompt** [`prompts/0_initial_meta_prompt.md`](prompts/0_initial_meta_prompt.md) which plans all cursor sessions and corresponding prompts. Each module = 1 session with an init prompt in [`prompts/*_init.md`](prompts/). 
 
 ```
 # Chat session execution order: 
@@ -75,8 +71,6 @@ pytest && python -m importlinter.cli && mypy && ruff check .
 
 python -m experiments.cli --config experiments/configs/prototype.json
 ```
-
-Outputs: `artifacts/prototype/`, `experiments/results/prototype/comparison.json`, optional `policy_tradeoff.json`.
 
 **Smoke test** (`ratings.local.dat`, ~120k rows, 10 distractors — not full Libimseti):
 
