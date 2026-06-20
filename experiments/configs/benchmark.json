@@ -1,0 +1,16 @@
+{
+  "data_path": "data/ratings.dat",
+  "artifact_dir": "artifacts/benchmark",
+  "embedding_dim": 32,
+  "learning_rate": 0.01,
+  "epochs": 20,
+  "k_values": [5, 10, 20],
+  "negative_downsample_ratio": 1.0,
+  "random_seed": 42,
+  "eval_split": "test",
+  "sampling_strategy": "random",
+  "aggregations": ["product", "harmonic", "weighted"],
+  "ncf_distractors": 100,
+  "weighted_alpha": 0.5,
+  "results_dir": "experiments/results/benchmark"
+}
